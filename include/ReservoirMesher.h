@@ -75,9 +75,6 @@ private:
     p4est_connectivity_t *conn;
     p4est_ghost_t *ghost;
 
-    std::vector<int> boundary;
-    std::map<std::string, int> label_boundary_map;
-
     bool debugging;
     bool verbose;
     int nranks, rank;

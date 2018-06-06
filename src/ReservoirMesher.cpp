@@ -85,6 +85,7 @@ void append_cell(int n0, int n1, int n2, int n3,
      boundary.push_back(b2);
      boundary.push_back(b3);
 
+     assert(gcells.size()==boundary.size());
      assert(tet_volume(gcells.size()/4-1)>0);
 }
 
@@ -189,6 +190,9 @@ void read_velocity_file(std::string filename)
 
 int refine_cell_vp(double quad[3*8], double scale, double maxl)
 {
+
+    return 0;
+
     int imin = (quad[0]-ox[0])/dx[0];
     int jmin = (quad[1]-ox[1])/dx[1];
     int kmin = (quad[2]-ox[2])/dx[2];
@@ -290,7 +294,7 @@ void generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4es
             p4est_topidx_t neighbor = p4est_quadrant_face_neighbor_extra(quad, treeid, face, &r, NULL, p4est->connectivity);
 
             if(neighbor==-1) {
-                boundary_id[face] = 1;
+                boundary_id[face] = face;
             }
         }
     }
@@ -529,17 +533,17 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
     } else {
         // Mesh simple case.
         append_cell(lnn[1], lnn[0], lnn[3], lnn[7],
-                    -1, cavity_boundary[2], -1, cavity_boundary[4]);
+                    -1, _boundary[1], -1, _boundary[4]);
         append_cell(lnn[7], lnn[4], lnn[5], lnn[0],
-                    cavity_boundary[3], -1, -1, cavity_boundary[4]);
+                    _boundary[2], -1, -1, _boundary[5]);
         append_cell(lnn[1], lnn[0], lnn[7], lnn[5],
-                    -1, -1, -1, -1);
+                    -1, _boundary[1], _boundary[2], -1);
         append_cell(lnn[3], lnn[0], lnn[2], lnn[7],
-                    -1, -1, -1, -1);
+                    -1, _boundary[3], -1, _boundary[4]);
         append_cell(lnn[6], lnn[4], lnn[7], lnn[0],
-                    -1, -1, -1, -1);
+                    -1, -1, _boundary[0], _boundary[5]);
         append_cell(lnn[7], lnn[0], lnn[2], lnn[6],
-                    -1, -1, -1, -1);
+                    _boundary[0], _boundary[3], -1, -1);
     }
 }
 
@@ -565,18 +569,7 @@ extern "C" {
     void create_verts (p4est_iter_volume_info_t * info, void *user_data)
     {
         double quad[3*8];
-        int boundary_id[6];
-        generate_quadcoords(info->p4est, info->treeid, info->quad, quad, boundary_id);
-
-        int _boundary[8];
-        _boundary[0] = std::max(std::max(boundary_id[0], boundary_id[2]), boundary_id[4]);
-        _boundary[1] = std::max(std::max(boundary_id[1], boundary_id[2]), boundary_id[4]);
-        _boundary[2] = std::max(std::max(boundary_id[0], boundary_id[3]), boundary_id[4]);
-        _boundary[3] = std::max(std::max(boundary_id[1], boundary_id[3]), boundary_id[4]);
-        _boundary[4] = std::max(std::max(boundary_id[0], boundary_id[2]), boundary_id[5]);
-        _boundary[5] = std::max(std::max(boundary_id[1], boundary_id[2]), boundary_id[5]);
-        _boundary[6] = std::max(std::max(boundary_id[0], boundary_id[3]), boundary_id[5]);
-        _boundary[7] = std::max(std::max(boundary_id[1], boundary_id[3]), boundary_id[5]);
+        generate_quadcoords(info->p4est, info->treeid, info->quad, quad);
 
         // Insert these points
         for(int i=0; i<8; i++) {
@@ -589,8 +582,6 @@ extern "C" {
                 for(int l=0; l<3; l++) {
                     gcoords.push_back(quad[i*3+l]);
                 }
-
-                boundary.push_back(_boundary[i]);
             }
         }
     }
@@ -637,7 +628,7 @@ void ReservoirMesher::set_vel_file(std::string filename)
         _hash_stride[i] = 0;
 
     hash_resolution = 1.0;
-    set_feature_resolution(50);
+    set_feature_resolution(2000);
     hash_trusty=false;
 }
 
@@ -942,6 +933,7 @@ void ReservoirMesher::write_vtu(std::string basename)
     NNodes=gcoords.size()/3;
 
     vtkSmartPointer<vtkUnstructuredGrid> ug = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    vtkSmartPointer<vtkUnstructuredGrid> surface = vtkSmartPointer<vtkUnstructuredGrid>::New();
 
     // Set points
     vtkSmartPointer<vtkPoints> pts = vtkSmartPointer<vtkPoints>::New();
@@ -951,6 +943,7 @@ void ReservoirMesher::write_vtu(std::string basename)
         pts->SetPoint(i, yamg_get_x(i));
     }
     ug->SetPoints(pts);
+    surface->SetPoints(pts);
 
     int Ntets=gcells.size()/4;
 
@@ -991,6 +984,38 @@ void ReservoirMesher::write_vtu(std::string basename)
     writer->SetInputData(ug);
 #endif
     writer->Write();
+
+    vtkSmartPointer<vtkIntArray> vtk_boundary = vtkSmartPointer<vtkIntArray>::New();
+    vtk_boundary->SetNumberOfComponents(1);
+    vtk_boundary->SetName("boundary");
+    vtk_boundary->SetNumberOfTuples(Ntets*4);
+
+    surface->Allocate(Ntets*4);
+    vtkSmartPointer<vtkIdList> ids_tri = vtkSmartPointer<vtkIdList>::New();
+    ids_tri->SetNumberOfIds(3);
+    for(int i=0; i<Ntets; i++) {
+        for(int j=0;j<4;j++) {
+            for(int k=0;k<3;k++) {
+                ids_tri->SetId(k, gcells[i*4+(j+1+k)%4]);
+            }
+            vtk_boundary->SetTuple1(i*4+j, boundary[i*4+j]);
+            surface->InsertNextCell(VTK_TRIANGLE, ids_tri);
+        }
+    }
+    surface->GetCellData()->AddArray(vtk_boundary);
+
+    vtkSmartPointer<vtkXMLUnstructuredGridWriter> swriter = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+    swriter->SetCompressorTypeToZLib();
+    swriter->SetDataModeToBinary();
+
+    swriter->SetFileName("surface.vtu");
+
+#if VTK_MAJOR_VERSION <= 5
+    swriter->SetInput(surface);
+#else
+    swriter->SetInputData(surface);
+#endif
+    swriter->Write();
 
     if(verbose)
         std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
