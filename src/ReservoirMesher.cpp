@@ -594,6 +594,111 @@ extern "C" {
             }
         }
     }
+
+    /* updating flags based on neighbor information */
+    static void allreduce_keep (int *keep, p8est_lnodes_t *lnodes, p8est_t *p8est, int check)
+    {
+      sc_array_t *node_data;
+      p8est_lnodes_buffer_t *buffer;
+      sc_array_t * sharers = lnodes->sharers;
+      int s, num_sharers = sharers ? (int) sharers->elem_count: (int) 0;
+
+      node_data = sc_array_new_data ((void *) keep, sizeof (int), lnodes->num_local_nodes);
+
+      buffer = p8est_lnodes_share_all (node_data, lnodes);
+
+      for (s = 0; s < num_sharers; s++) {
+        p8est_lnodes_rank_t * sharer = p8est_lnodes_rank_array_index_int (sharers, s);
+        p4est_locidx_t *shared_nodes = (p4est_locidx_t *) sharer->shared_nodes.array;
+        int * sharer_keep = (int *) buffer->recv_buffers[s].array;
+        p4est_locidx_t num_shared = (p4est_locidx_t) sharer->shared_nodes.elem_count;
+        p4est_locidx_t d;
+
+        if (sharer->rank == p8est->mpirank) continue;
+
+        for (d = 0; d < num_shared; d++) {
+          if (check) {
+            P4EST_ASSERT (sharer_keep[d] == keep[shared_nodes[d]]);
+          } else {
+            if (sharer_keep[d]) {
+              keep[shared_nodes[d]] = 1;
+            }
+          }
+        }
+      }
+
+      p8est_lnodes_buffer_destroy (buffer);
+
+      sc_array_destroy (node_data);
+    }
+
+    static void number_tet_nodes (p8est_t *p4est, p8est_ghost_t * ghost)
+    {
+      /* This turns on and off Toby's code */
+      p8est_lnodes_t * lnodes = p8est_lnodes_new (p4est, ghost, 2);
+
+      {
+        p4est_locidx_t q;
+        int           *keep = P4EST_ALLOC_ZERO(int, lnodes->num_local_nodes);
+
+        for (q = 0; q < p4est->local_num_quadrants; q++) {
+          /* Keep corners */
+          int vert_to_node[8] = {0, 2, 6, 8, 18, 20, 24, 26};
+          int edge_to_node[12] = {1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25};
+          int face_to_node[6] = {4, 10, 12, 14, 16, 22};
+          int cell_to_node = 13;
+          int has_hanging, hanging_edge[12], hanging_face[6];
+          int c, e, f;
+
+          for (c = 0; c < P8EST_CHILDREN; c++) {
+            keep[q*27 + vert_to_node[c]] = 1;
+          }
+          has_hanging = p8est_lnodes_decode(lnodes->face_code[q], hanging_face, hanging_edge);
+
+          if (!has_hanging) continue;
+
+          for (e = 0; e < P8EST_EDGES; e++) {
+            if (hanging_edge[e] == 0 || hanging_edge[e] == 1) {
+              keep[q*27 + edge_to_node[e]] = 1;
+            }
+          }
+
+          for (f = 0; f < P8EST_FACES; f++) {
+            if (hanging_face[f] >= 0) {
+              keep[q*27 + face_to_node[f]] = 1;
+            }
+          }
+        }
+
+        allreduce_keep (keep, lnodes, p4est, 0);
+
+        for (q = 0; q < p4est->local_num_quadrants; q++) {
+          int cell_keep[27], v;
+          p4est_gloidx_t cell_id[27];
+
+          for (v = 0; v < 27; v++) {
+            p4est_locidx_t lidx = lnodes->element_nodes[q*27 + v];
+
+            cell_keep[v] = keep[lidx];
+            cell_id[v] = p8est_lnodes_global_index (lnodes, lidx);
+          }
+
+          /* TODO:
+           *
+           * - identify other vertices to keep based on the tetrahedralization
+           *   scheme
+           * - count the number of tetrahedra that will be added in this cell to
+           *   do the tetrahedralization scheme
+           */
+        }
+
+#if P4EST_ENABLE_DEBUG
+        allreduce_keep (keep, lnodes, p4est, 1);
+#endif
+
+        P4EST_FREE(keep);
+      }
+    }
 }
 
 ReservoirMesher::ReservoirMesher(int *argc, char ***argv)
@@ -836,42 +941,6 @@ void ReservoirMesher::refine_p4est(int lb_its)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
-/* updating flags based on neighbor information */
-static void allreduce_keep (int *keep, p8est_lnodes_t *lnodes, p8est_t *p8est, int check)
-{
-  sc_array_t *node_data;
-  p8est_lnodes_buffer_t *buffer;
-  sc_array_t * sharers = lnodes->sharers;
-  int s, num_sharers = sharers ? (int) sharers->elem_count: (int) 0;
-
-  node_data = sc_array_new_data ((void *) keep, sizeof (int), lnodes->num_local_nodes);
-
-  buffer = p8est_lnodes_share_all (node_data, lnodes);
-
-  for (s = 0; s < num_sharers; s++) {
-    p8est_lnodes_rank_t * sharer = p8est_lnodes_rank_array_index_int (sharers, s);
-    p4est_locidx_t *shared_nodes = (p4est_locidx_t *) sharer->shared_nodes.array;
-    int * sharer_keep = (int *) buffer->recv_buffers[s].array;
-    p4est_locidx_t num_shared = (p4est_locidx_t) sharer->shared_nodes.elem_count;
-    p4est_locidx_t d;
-
-    if (sharer->rank == p8est->mpirank) continue;
-
-    for (d = 0; d < num_shared; d++) {
-      if (check) {
-        P4EST_ASSERT (sharer_keep[d] == keep[shared_nodes[d]]);
-      } else {
-        if (sharer_keep[d]) {
-          keep[shared_nodes[d]] = 1;
-        }
-      }
-    }
-  }
-
-  p8est_lnodes_buffer_destroy (buffer);
-
-  sc_array_destroy (node_data);
-}
 
 void ReservoirMesher::triangulate()
 {
@@ -879,73 +948,7 @@ void ReservoirMesher::triangulate()
     if(verbose && rank==0)
         std::cout<<"INFO: void ReservoirMesher::triangulate() :: ";
 
-
-    /* This turns on and off Toby's code */
-#if 1
-    p8est_lnodes_t * lnodes = p8est_lnodes_new (p4est, ghost_layer, 2);
-
-    {
-      p4est_locidx_t q;
-      int           *keep = P4EST_ALLOC_ZERO(int, lnodes->num_local_nodes);
-
-      for (q = 0; q < p4est->local_num_quadrants; q++) {
-        /* Keep corners */
-        int vert_to_node[8] = {0, 2, 6, 8, 18, 20, 24, 26};
-        int edge_to_node[12] = {1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25};
-        int face_to_node[6] = {4, 10, 12, 14, 16, 22};
-        int cell_to_node = 13;
-        int has_hanging, hanging_edge[12], hanging_face[6];
-        int c, e, f;
-
-        for (c = 0; c < P8EST_CHILDREN; c++) {
-          keep[q*27 + vert_to_node[c]] = 1;
-        }
-        has_hanging = p8est_lnodes_decode(lnodes->face_code[q], hanging_face, hanging_edge);
-
-        if (!has_hanging) continue;
-
-        for (e = 0; e < P8EST_EDGES; e++) {
-          if (hanging_edge[e] == 0 || hanging_edge[e] == 1) {
-            keep[q*27 + edge_to_node[e]] = 1;
-          }
-        }
-
-        for (f = 0; f < P8EST_FACES; f++) {
-          if (hanging_face[f] >= 0) {
-            keep[q*27 + face_to_node[f]] = 1;
-          }
-        }
-      }
-
-      allreduce_keep (keep, lnodes, p4est, 0);
-
-      for (q = 0; q < p8est->local_num_quadrants; q++) {
-        int cell_keep[27], v;
-        p4est_gloidx_t cell_id[27];
-
-        for (v = 0; v < 27; v++) {
-          p4est_locidx_t lidx = lnodes->element_nodes[q*27 + v];
-
-          cell_keep[v] = keep[lidx];
-          cell_id[v] = p8est_lnodes_global_index (lnodes, lidx);
-        }
-
-        /* TODO:
-         *
-         * - identify other vertices to keep based on the tetrahedralization
-         *   scheme
-         * - count the number of tetrahedra that will be added in this cell to
-         *   do the tetrahedralization scheme
-         */
-      }
-
-#if P4EST_ENABLE_DEBUG
-      allreduce_keep (keep, lnodes, p4est, 1);
-#endif
-
-      P4EST_FREE(keep);
-    }
-#endif
+    number_tet_nodes (p4est, ghost);
 
     p4est_iterate (p4est, /* the forest */
                    ghost,
