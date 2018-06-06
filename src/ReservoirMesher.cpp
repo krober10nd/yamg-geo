@@ -651,7 +651,7 @@ extern "C" {
           int c, e, f;
 
           for (c = 0; c < P8EST_CHILDREN; c++) {
-            keep[q*27 + vert_to_node[c]] = 1;
+            keep[lnodes->element_nodes[q*27 + vert_to_node[c]]] = 1;
           }
           has_hanging = p8est_lnodes_decode(lnodes->face_code[q], hanging_face, hanging_edge);
 
@@ -659,13 +659,13 @@ extern "C" {
 
           for (e = 0; e < P8EST_EDGES; e++) {
             if (hanging_edge[e] == 0 || hanging_edge[e] == 1) {
-              keep[q*27 + edge_to_node[e]] = 1;
+              keep[lnodes->element_nodes[q*27 + edge_to_node[e]]] = 1;
             }
           }
 
           for (f = 0; f < P8EST_FACES; f++) {
             if (hanging_face[f] >= 0) {
-              keep[q*27 + face_to_node[f]] = 1;
+              keep[lnodes->element_nodes[q*27 + face_to_node[f]]] = 1;
             }
           }
         }
@@ -698,6 +698,8 @@ extern "C" {
 
         P4EST_FREE(keep);
       }
+
+      p8est_lnodes_destroy(lnodes);
     }
 }
 
