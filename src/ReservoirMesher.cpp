@@ -190,9 +190,6 @@ void read_velocity_file(std::string filename)
 
 int refine_cell_vp(double quad[3*8], double scale, double maxl)
 {
-
-    return 0;
-
     int imin = (quad[0]-ox[0])/dx[0];
     int jmin = (quad[1]-ox[1])/dx[1];
     int kmin = (quad[2]-ox[2])/dx[2];
@@ -628,7 +625,7 @@ void ReservoirMesher::set_vel_file(std::string filename)
         _hash_stride[i] = 0;
 
     hash_resolution = 1.0;
-    set_feature_resolution(2000);
+    set_feature_resolution(200);
     hash_trusty=false;
 }
 
