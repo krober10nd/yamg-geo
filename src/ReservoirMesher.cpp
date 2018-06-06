@@ -640,13 +640,13 @@ extern "C" {
       {
         p4est_locidx_t q;
         int           *keep = P4EST_ALLOC_ZERO(int, lnodes->num_local_nodes);
+        int vert_to_node[8] = {0, 2, 6, 8, 18, 20, 24, 26};
+        int edge_to_node[12] = {1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25};
+        int face_to_node[6] = {4, 10, 12, 14, 16, 22};
+        int cell_to_node = 13;
 
         for (q = 0; q < p4est->local_num_quadrants; q++) {
           /* Keep corners */
-          int vert_to_node[8] = {0, 2, 6, 8, 18, 20, 24, 26};
-          int edge_to_node[12] = {1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25};
-          int face_to_node[6] = {4, 10, 12, 14, 16, 22};
-          int cell_to_node = 13;
           int has_hanging, hanging_edge[12], hanging_face[6];
           int c, e, f;
 
@@ -675,12 +675,38 @@ extern "C" {
         for (q = 0; q < p4est->local_num_quadrants; q++) {
           int cell_keep[27], v;
           p4est_gloidx_t cell_id[27];
+          int has_hanging, hanging_edge[12], hanging_face[6];
+          int c, e, f;
 
           for (v = 0; v < 27; v++) {
             p4est_locidx_t lidx = lnodes->element_nodes[q*27 + v];
 
             cell_keep[v] = keep[lidx];
             cell_id[v] = p8est_lnodes_global_index (lnodes, lidx);
+          }
+
+          has_hanging = p8est_lnodes_decode(lnodes->face_code[q], hanging_face, hanging_edge);
+
+          if (has_hanging) {
+            for (e = 0; e < P8EST_EDGES; e++) {
+              if (hanging_edge[e] == 0 || hanging_edge[e] == 1) {
+                c = p8est_edge_corners[e][hanging_edge[e]^1];
+                cell_keep[vert_to_node[c]] = cell_keep[edge_to_node[e]];
+                cell_id[vert_to_node[c]] = cell_id[edge_to_node[e]];
+                cell_keep[edge_to_node[e]] = 0;
+                cell_id[edge_to_node[e]] = -1;
+              }
+            }
+
+            for (f = 0; f < P8EST_FACES; f++) {
+              if (hanging_face[f] >= 0) {
+                c = p8est_face_corners[f][hanging_edge[f]^3];
+                cell_keep[vert_to_node[c]] = cell_keep[face_to_node[f]];
+                cell_id[vert_to_node[c]] = cell_id[face_to_node[f]];
+                cell_keep[face_to_node[f]] = 0;
+                cell_id[face_to_node[f]] = -1;
+              }
+            }
           }
 
           /* TODO:
