@@ -28,12 +28,9 @@ bool hash_trusty;
 double hash_resolution;
 
 double geom_bounds[6];
-
-double ox[3];
-double dx[3];
+double ox[3], dx[3];
 int nx[3];
 std::vector<float> data;
-
 
 std::unordered_map<long long, int> unn2lnn;
 std::vector<long long> lnn2unn;
@@ -81,7 +78,7 @@ long double Yamg::tet_volume(int e)
 }
 
 void Yamg::append_cell(int n0, int n1, int n2, int n3,
-                                  int b0, int b1, int b2, int b3) {
+                       int b0, int b1, int b2, int b3) {
      gcells.push_back(n0);
      gcells.push_back(n1);
      gcells.push_back(n2);
@@ -586,7 +583,7 @@ void Yamg::create_p4est()
     double lz = geom_bounds[5] - geom_bounds[4];
 
     assert(lx>0 && ly>0 && lz>0);
-    double base_size=std::min(lx, std::min(ly, lz))/4;
+    double base_size=std::min(lx, std::min(ly, lz));
 
     // Get dimensions.
     int ni=round(lx/base_size);
@@ -668,41 +665,14 @@ void Yamg::create_p4est()
     p4est_connectivity_complete (conn);
 }
 
-void Yamg::refine_p4est(p4est_refine_t refine_fn, int lb_its)
+void Yamg::refine_p4est(p4est_refine_t refine_fn)
 {
     double tic = MPI_Wtime();
     if(verbose && rank==0)
-        std::cout<<"INFO: void Yamg::refine_p4est(int lb_its="<<lb_its<<") :: ";
+        std::cout<<"INFO: void Yamg::refine_p4est(...) :: ";
 
-    int recursive = 0;
-    int partforcoarsen = 0;
-
-    if (nranks>1) {
-        // Refine the forest recursively in parallel.
-        for(int r=0; r<lb_its; r++) {
-            p4est_refine (p4est, recursive, refine_fn, NULL);
-
-            /* If we call the 2:1 balance we ensure that neighbors do not differ in size
-             * by more than a factor of 2. This can optionally include diagonal
-             * neighbors across edges or corners as well; see p4est.h. */
-            p4est_balance (p4est, P4EST_CONNECT_FACE, NULL);
-
-            /* Partition: The quadrants are redistributed for equal element count.  The
-             * partition can optionally be modified such that a family of octants, which
-             * are possibly ready for coarsening, are never split between processors. */
-            p4est_partition (p4est, partforcoarsen, NULL);
-        }
-    }
-
-    // Serial refinement or completion of parallel refinement.
-    recursive = 1;
-    p4est_refine (p4est, recursive, refine_fn, NULL);
+    p4est_refine (p4est, 1, refine_fn, NULL);
     p4est_balance (p4est, P4EST_CONNECT_FULL, NULL);
-
-    if (nranks>1) {
-        // Final load balance.
-        p4est_partition (p4est, partforcoarsen, NULL);
-    }
 
     ghost = p4est_ghost_new (p4est, P4EST_CONNECT_FULL);
 

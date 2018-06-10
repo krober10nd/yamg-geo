@@ -84,3 +84,6 @@ target_link_libraries(yamg ${YAMG_LIBRARIES})
 ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
 
+ADD_EXECUTABLE(yamg-01 src/yamg-01.cpp)
+TARGET_LINK_LIBRARIES(yamg-01 ${YAMG_LIBRARIES} yamg)
+
