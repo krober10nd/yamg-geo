@@ -1,4 +1,4 @@
-#include "ReservoirMesher.h"
+#include "Yamg.h"
 
 #include <vtkTetra.h>
 #include <vtkIdList.h>
@@ -29,7 +29,11 @@ double hash_resolution;
 
 double geom_bounds[6];
 
-double feature_resolution;
+double ox[3];
+double dx[3];
+int nx[3];
+std::vector<float> data;
+
 
 std::unordered_map<long long, int> unn2lnn;
 std::vector<long long> lnn2unn;
@@ -39,24 +43,27 @@ std::vector<double> gcoords;
 std::vector<int> gcells;
 std::vector<int> boundary;
 
-double *yamg_get_x(int i)
+const double *Yamg::get_point(int nid) const
 {
-    assert(i>=0);
-    assert(i<gcoords.size()/3);
-    return gcoords.data()+i*3;
+    assert(nid>=0);
+    assert(nid<gcoords.size()/3);
+    return gcoords.data()+nid*3;
 }
 
-int *yamg_get_tet(int i)
+const int *Yamg::get_tet(int eid)
 {
-    assert(i>=0);
-    assert(i<gcells.size()/4);
-    return gcells.data()+i*4;
+    assert(eid>=0);
+    assert(eid<gcells.size()/4);
+    return gcells.data()+eid*4;
 }
 
 // Calculate volume of tetrahedron.
-long double tet_volume(int e)
+long double Yamg::tet_volume(int e)
 {
-    const int *n=yamg_get_tet(e);
+    assert(e>=0);
+    assert(e<=gcells.size()/4);
+
+    const int *n=Yamg::get_tet(e);
 
     long double x0[3], x1[3], x2[3];
     for(int i=0; i<3; i++) {
@@ -73,8 +80,8 @@ long double tet_volume(int e)
     return v;
 }
 
-void append_cell(int n0, int n1, int n2, int n3,
-                 int b0, int b1, int b2, int b3) {
+void Yamg::append_cell(int n0, int n1, int n2, int n3,
+                                  int b0, int b1, int b2, int b3) {
      gcells.push_back(n0);
      gcells.push_back(n1);
      gcells.push_back(n2);
@@ -86,134 +93,59 @@ void append_cell(int n0, int n1, int n2, int n3,
      boundary.push_back(b3);
 
      assert(gcells.size()==boundary.size());
-     assert(tet_volume(gcells.size()/4-1)>0);
+     assert(Yamg::tet_volume(gcells.size()/4-1)>0);
 }
 
-double ox[3];
-double dx[3];
-int nx[3];
-std::vector<float> vp;
-double scale=50.0;
-double vp_sw=1484.0; // Velocity of sound in sea water
-
-float get_vp(int i, int j, int k)
+float Yamg::get_scalar(int i, int j, int k)
 {
     i = std::min(i, nx[0]-1);
     j = std::min(j, nx[1]-1);
     k = std::min(k, nx[2]-1);
 
-    float _vp = vp[k*nx[0]*nx[1]+j*nx[0]+i];
-
-    if(std::isfinite(_vp))
-        return _vp;
-    else
-        return vp_sw;
+    return data[k*nx[0]*nx[1]+j*nx[0]+i];
 }
 
-float get_vp(double x, double y, double z)
+float Yamg::get_scalar(double x, double y, double z) const
 {
     int i = (x-ox[0])/dx[0];
     int j = (y-ox[1])/dx[1];
     int k = (z-ox[2])/dx[2];
 
-    return get_vp(i, j, k);
+    return get_scalar(i, j, k);
 }
 
-float calculate_cell_vp(const int *n){
-    double vp = 0;
-    int vcnt=0;
-    for(int j=0; j<4; j++) {
-        const double *x = yamg_get_x(n[j]);
-        double ivp = get_vp(x[0], x[1], x[2]);
-
-        if(std::isfinite(ivp)) {
-            vp+=ivp;
-            vcnt++;
-        }
+// This is really shit - should be projected value from image to tetrahedron
+float Yamg::get_scalar_p0(int eid) const{
+    double value = 0;
+    int cnt=0;
+    const int *tet = Yamg::get_tet(eid);
+    for(int i=0; i<4; i++) {
+        const double *x = get_point(tet[i]);
+        value += get_scalar(x[0], x[1], x[2]);
+        cnt++;
     }
-    vp/=vcnt;
-
-    return vp;
+    return value/cnt;
 }
 
-void read_velocity_file(std::string filename)
+void Yamg::set_data(const std::vector<float> &data_in, const double *origin, const double *spacing, const int *dims)
 {
-    /*
-        scaling info:
-        H0.vel contains velocities vp in m/s
-        a length scale is typically  scale*vp/1500
-        with scale, for instance, 100, 50, 25, 10 or 5 m.
-
-        unformatted file, little-endian, with
-         3 doubles for ox (origin in x,y,z),
-         3 doubles for dx (spacing in x,y,z),
-         3 4-byte ints for nx (gridpoints in x,y,z),
-         nx(1)*nx(2)*nx(3) 4-byte floats for velocity vp,
-           x is fastest index, z is slowest
-    */
-    std::ifstream input(filename, std::ios::binary);
-    input.read((char *)ox, sizeof(ox));
-    input.read((char *)dx, sizeof(dx));
-    input.read((char *)nx, sizeof(nx));
-
-    vp.resize(nx[0]*nx[1]*nx[2]);
-    input.read((char *)vp.data(), vp.size()*sizeof(float));
-
-    input.close();
-
-    /*
-    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
-    image->SetDimensions(nx);
-    image->SetOrigin(ox);
-    image->SetSpacing(dx);
-    image->AllocateScalars(VTK_FLOAT, 1);
-
-    int ipos=0;
-    for(int k=0;k<nx[2];k++) {
-        for(int j=0;j<nx[1];j++) {
-            for(int i=0;i<nx[0];i++) {
-                if(std::isfinite(vp[ipos])) {
-                    image->SetScalarComponentFromFloat(i, j, k, 0, vp[ipos]);
-                }else{
-                    image->SetScalarComponentFromFloat(i, j, k, 0, 0);
-                }
-                ipos++;
-            }
-        }
+    data = data_in;
+    for(int i=0;i<3;i++) {
+        ox[i] = origin[i];
+        dx[i] = spacing[i];
+        nx[i] = dims[i];
     }
 
-    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-    image_writer->SetFileName("image.vti");
-    image_writer->SetInputData(image);
-    image_writer->Write(); */
-}
-
-int refine_cell_vp(double quad[3*8], double scale, double maxl)
-{
-    int imin = (quad[0]-ox[0])/dx[0];
-    int jmin = (quad[1]-ox[1])/dx[1];
-    int kmin = (quad[2]-ox[2])/dx[2];
-
-    int imax = (quad[7*3+0]-ox[0])/dx[0];
-    int jmax = (quad[7*3+1]-ox[1])/dx[1];
-    int kmax = (quad[7*3+2]-ox[2])/dx[2];
-
-    for(int i=imin; i<imax; i++) {
-        for(int j=jmin; j<jmax; j++) {
-            for(int k=kmin; k<kmax; k++) {
-                float vp_i = get_vp(i, j, k);
-
-                if(std::isfinite(vp_i)) {
-                    float l = scale*vp_i/1500.;
-                    if(l<maxl) {
-                        return 1;
-                    }
-                }
-            }
-        }
+    for(int i=0; i<3; i++) {
+        geom_bounds[2*i] = ox[i]+dx[i];
+        geom_bounds[2*i+1] = ox[i]+dx[i]*(nx[i]-1);
     }
 
-    return 0;
+    for(int i=0; i<2; i++)
+        _hash_stride[i] = 0;
+
+    hash_resolution = 0.01*std::min(std::min(dx[0], dx[1]), dx[2]);
+    hash_trusty=false;
 }
 
 double edge_length(const double *x0, const double *x1)
@@ -221,24 +153,6 @@ double edge_length(const double *x0, const double *x1)
     return sqrt((x0[0] - x1[0])*(x0[0] - x1[0])+
                 (x0[1] - x1[1])*(x0[1] - x1[1])+
                 (x0[2] - x1[2])*(x0[2] - x1[2]));
-}
-
-// Calculate volume of tetrahedron.
-long double tet_volume(const double *v0, const double *v1, const double *v2, const double *v3)
-{
-    long double x0[3], x1[3], x2[3];
-    for(int i=0; i<3; i++) {
-        x0[i] = v1[i] - v0[i];
-        x1[i] = v2[i] - v0[i];
-        x2[i] = v3[i] - v0[i];
-    }
-
-    long double det = x0[0]*x1[1]*x2[2] - x0[0]*x1[2]*x2[1] - x0[1]*x1[0]*x2[2] + x0[1]*x1[2]*x2[0] + x0[2]*x1[0]*x2[1] - x0[2]*x1[1]*x2[0];
-
-    // Sign based on choice of orientation.
-    long double v = -det/6.0L;
-
-    return v;
 }
 
 // Calculate area using Heron's Formula
@@ -269,7 +183,7 @@ long double tri_area(const double *x1, const double *x2, const double *x3) {
     return std::sqrt(s*(s-a)*(s-b)*(s-c));
 }
 
-void generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4est_quadrant_t *quad, double *x, int *boundary_id=NULL)
+void Yamg::generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4est_quadrant_t *quad, double *x, int *boundary_id, int *index_range)
 {
     assert(P4EST_CHILDREN==8); // not pretending this is general
 
@@ -294,6 +208,18 @@ void generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4es
                 boundary_id[face] = face;
             }
         }
+    }
+
+    if(index_range!=NULL) {
+        // Index ranges for data
+        index_range[0] = (x[0]-ox[0])/dx[0];
+        index_range[1] = (x[7*3+0]-ox[0])/dx[0];
+
+        index_range[2] = (x[1]-ox[1])/dx[1];
+        index_range[3] = (x[7*3+1]-ox[1])/dx[1];
+
+        index_range[4] = (x[2]-ox[2])/dx[2];
+        index_range[5] = (x[7*3+2]-ox[2])/dx[2];
     }
 }
 
@@ -324,7 +250,7 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
 {
     double quad[3*8];
     int _boundary[6];
-    generate_quadcoords(info->p4est, info->treeid, info->quad, quad, _boundary);
+    Yamg::generate_quadcoords(info->p4est, info->treeid, info->quad, quad, _boundary, NULL);
 
     // Create a local table from local node numbers to unique (global) node number.
     long long unn[8];
@@ -465,8 +391,8 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
             }
 
             if(cutcnt==0) {
-                append_cell(cavity[i*6+1], cavity[i*6+0], cavity[i*6+2], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(cavity[i*6+1], cavity[i*6+0], cavity[i*6+2], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
             } else if(cutcnt==1) {
                 int ref_copy[]= {-1, -1, -1, -1, -1, -1};
                 for(int j=0; j<3; j++) {
@@ -479,11 +405,11 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
                     }
                 }
 
-                append_cell(ref_copy[3], ref_copy[0], ref_copy[2], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(ref_copy[3], ref_copy[0], ref_copy[2], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
 
-                append_cell(ref_copy[1], ref_copy[3], ref_copy[2], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(ref_copy[1], ref_copy[3], ref_copy[2], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
             } else if(cutcnt==2) {
                 int ref_copy[]= {-1, -1, -1, -1, -1, -1};
                 for(int j=0; j<3; j++) {
@@ -497,76 +423,58 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
                     }
                 }
 
-                append_cell(ref_copy[1], ref_copy[3], ref_copy[4], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(ref_copy[1], ref_copy[3], ref_copy[4], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
                 // Need to determine unique orientation to split trapazoid.
                 if(_lnn2unn[ref_copy[2]]>_lnn2unn[ref_copy[0]]) {
-                    append_cell(ref_copy[3], ref_copy[0], ref_copy[2], cid,
-                                -1, -1, -1, cavity_boundary[i]);
+                    Yamg::append_cell(ref_copy[3], ref_copy[0], ref_copy[2], cid,
+                                                 -1, -1, -1, cavity_boundary[i]);
 
-                    append_cell(ref_copy[4], ref_copy[3], ref_copy[2], cid,
-                                -1, -1, -1, cavity_boundary[i]);
+                    Yamg::append_cell(ref_copy[4], ref_copy[3], ref_copy[2], cid,
+                                                 -1, -1, -1, cavity_boundary[i]);
                 } else {
-                    append_cell(ref_copy[3], ref_copy[0], ref_copy[4], cid,
-                                -1, -1, -1, cavity_boundary[i]);
+                    Yamg::append_cell(ref_copy[3], ref_copy[0], ref_copy[4], cid,
+                                                 -1, -1, -1, cavity_boundary[i]);
 
-                    append_cell(ref_copy[4], ref_copy[0], ref_copy[2], cid,
-                                -1, -1, -1, cavity_boundary[i]);
+                    Yamg::append_cell(ref_copy[4], ref_copy[0], ref_copy[2], cid,
+                                                 -1, -1, -1, cavity_boundary[i]);
                 }
             } else if(cutcnt==3) {
-                append_cell(cavity[i*6+3], cavity[i*6+0], cavity[i*6+5], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(cavity[i*6+3], cavity[i*6+0], cavity[i*6+5], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
 
-                append_cell(cavity[i*6+1], cavity[i*6+3], cavity[i*6+4], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(cavity[i*6+1], cavity[i*6+3], cavity[i*6+4], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
 
-                append_cell(cavity[i*6+4], cavity[i*6+5], cavity[i*6+2], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(cavity[i*6+4], cavity[i*6+5], cavity[i*6+2], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
 
-                append_cell(cavity[i*6+4], cavity[i*6+3], cavity[i*6+5], cid,
-                            -1, -1, -1, cavity_boundary[i]);
+                Yamg::append_cell(cavity[i*6+4], cavity[i*6+3], cavity[i*6+5], cid,
+                                             -1, -1, -1, cavity_boundary[i]);
             }
         }
     } else {
         // Mesh simple case.
-        append_cell(lnn[1], lnn[0], lnn[3], lnn[7],
-                    -1, _boundary[1], -1, _boundary[4]);
-        append_cell(lnn[7], lnn[4], lnn[5], lnn[0],
-                    _boundary[2], -1, -1, _boundary[5]);
-        append_cell(lnn[1], lnn[0], lnn[7], lnn[5],
-                    -1, _boundary[1], _boundary[2], -1);
-        append_cell(lnn[3], lnn[0], lnn[2], lnn[7],
-                    -1, _boundary[3], -1, _boundary[4]);
-        append_cell(lnn[6], lnn[4], lnn[7], lnn[0],
-                    -1, -1, _boundary[0], _boundary[5]);
-        append_cell(lnn[7], lnn[0], lnn[2], lnn[6],
-                    _boundary[0], _boundary[3], -1, -1);
+        Yamg::append_cell(lnn[1], lnn[0], lnn[3], lnn[7],
+                                     -1, _boundary[1], -1, _boundary[4]);
+        Yamg::append_cell(lnn[7], lnn[4], lnn[5], lnn[0],
+                                     _boundary[2], -1, -1, _boundary[5]);
+        Yamg::append_cell(lnn[1], lnn[0], lnn[7], lnn[5],
+                                     -1, _boundary[1], _boundary[2], -1);
+        Yamg::append_cell(lnn[3], lnn[0], lnn[2], lnn[7],
+                                     -1, _boundary[3], -1, _boundary[4]);
+        Yamg::append_cell(lnn[6], lnn[4], lnn[7], lnn[0],
+                                     -1, -1, _boundary[0], _boundary[5]);
+        Yamg::append_cell(lnn[7], lnn[0], lnn[2], lnn[6],
+                                     _boundary[0], _boundary[3], -1, -1);
     }
 }
 
 extern "C" {
-    int refine_fn(p4est_t *p4est, p4est_topidx_t which_tree, p4est_quadrant_t *quadrant)
-    {
-        double quad[3*8];
-        generate_quadcoords(p4est, which_tree, quadrant, quad);
-
-        // Check if we have already reached the smallest feature size.
-        double maxl=pow(quad[0]-quad[3], 2);
-        maxl = std::max(maxl, pow(quad[1]-quad[2*3+1], 2));
-        maxl = std::max(maxl, pow(quad[2]-quad[4*3+2], 2));
-        maxl = sqrt(maxl);
-
-        if(maxl>feature_resolution) {
-            return refine_cell_vp(quad, scale, maxl);
-        }
-
-        return 0;
-    }
-
     void create_verts (p4est_iter_volume_info_t * info, void *user_data)
     {
         double quad[3*8];
-        generate_quadcoords(info->p4est, info->treeid, info->quad, quad);
+        Yamg::generate_quadcoords(info->p4est, info->treeid, info->quad, quad, NULL, NULL);
 
         // Insert these points
         for(int i=0; i<8; i++) {
@@ -584,7 +492,7 @@ extern "C" {
     }
 }
 
-ReservoirMesher::ReservoirMesher(int *argc, char ***argv)
+Yamg::Yamg(int *argc, char ***argv)
 {
     // Initialise MPI
     int mpiret = sc_MPI_Init (argc, argv);
@@ -610,44 +518,22 @@ ReservoirMesher::ReservoirMesher(int *argc, char ***argv)
     assert(rank==0);
 }
 
-ReservoirMesher::~ReservoirMesher() {}
+Yamg::~Yamg() {}
 
-void ReservoirMesher::set_vel_file(std::string filename)
-{
-    read_velocity_file(filename);
-
-    for(int i=0; i<3; i++) {
-        geom_bounds[2*i] = ox[i]+dx[i];
-        geom_bounds[2*i+1] = ox[i]+dx[i]*(nx[i]-1);
-    }
-
-    for(int i=0; i<2; i++)
-        _hash_stride[i] = 0;
-
-    hash_resolution = 1.0;
-    set_feature_resolution(200);
-    hash_trusty=false;
-}
-
-void ReservoirMesher::set_feature_resolution(float value)
-{
-    feature_resolution = value;
-}
-
-void ReservoirMesher::enable_debugging()
+void Yamg::enable_debugging()
 {
     debugging = true;
 }
 
-void ReservoirMesher::enable_verbose()
+void Yamg::enable_verbose()
 {
     verbose = true;
 }
 
-void ReservoirMesher::finalise()
+void Yamg::finalise()
 {
     if(verbose && rank==0)
-        std::cout<<"INFO: void ReservoirMesher::finalise()\n";
+        std::cout<<"INFO: void Yamg::finalise()\n";
 
     MPI_Barrier(mpicomm);
 
@@ -671,14 +557,14 @@ void ReservoirMesher::finalise()
     SC_CHECK_MPI (mpiret);
 }
 
-void ReservoirMesher::init_domain()
+void Yamg::init_domain()
 {
     init_coord_hash();
     create_p4est();
 }
 
 // Init geometric hashing.
-int ReservoirMesher::init_coord_hash()
+int Yamg::init_coord_hash()
 {
     // long long lx = (long long)ceil((long double)1.1*(geom_bounds[1]-geom_bounds[0])/resolution);
     long long ly = (long long)ceil(1.1*(geom_bounds[3]-geom_bounds[2])/hash_resolution);
@@ -692,7 +578,7 @@ int ReservoirMesher::init_coord_hash()
     return 0;
 }
 
-void ReservoirMesher::create_p4est()
+void Yamg::create_p4est()
 {
     // Determine a sensible coarse element size.
     double lx = geom_bounds[1] - geom_bounds[0];
@@ -782,11 +668,11 @@ void ReservoirMesher::create_p4est()
     p4est_connectivity_complete (conn);
 }
 
-void ReservoirMesher::refine_p4est(int lb_its)
+void Yamg::refine_p4est(p4est_refine_t refine_fn, int lb_its)
 {
     double tic = MPI_Wtime();
     if(verbose && rank==0)
-        std::cout<<"INFO: void ReservoirMesher::refine_p4est(int lb_its="<<lb_its<<") :: ";
+        std::cout<<"INFO: void Yamg::refine_p4est(int lb_its="<<lb_its<<") :: ";
 
     int recursive = 0;
     int partforcoarsen = 0;
@@ -824,11 +710,11 @@ void ReservoirMesher::refine_p4est(int lb_its)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
-void ReservoirMesher::triangulate()
+void Yamg::triangulate()
 {
     double tic = MPI_Wtime();
     if(verbose && rank==0)
-        std::cout<<"INFO: void ReservoirMesher::triangulate() :: ";
+        std::cout<<"INFO: void Yamg::triangulate() :: ";
 
     p4est_iterate (p4est, /* the forest */
                    ghost,
@@ -849,7 +735,7 @@ void ReservoirMesher::triangulate()
     unn2lnn.clear();
     int ntets = gcells.size()/4;
     for(int i=0; i<ntets; i++) {
-        const int *n = yamg_get_tet(i);
+        const int *n = Yamg::get_tet(i);
         for(int j=0; j<4; j++) {
             int lnn = n[j];
             long long unn = lnn2unn[lnn];
@@ -864,12 +750,12 @@ void ReservoirMesher::triangulate()
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
-void ReservoirMesher::get_element_facet(int eid, int fid, int facet[3]) const
+void Yamg::get_element_facet(int eid, int fid, int facet[3]) const
 {
     assert(eid>=0);
     assert(eid<gcells.size()/4);
 
-    const int *n = yamg_get_tet(eid);
+    const int *n = Yamg::get_tet(eid);
 
     switch(fid) {
     case 0:
@@ -899,26 +785,21 @@ void ReservoirMesher::get_element_facet(int eid, int fid, int facet[3]) const
 
 #include <sstream>
 
-int ReservoirMesher::get_number_points()
+int Yamg::get_number_points()
 {
     return gcoords.size()/3;
 }
 
-int ReservoirMesher::get_number_tets()
+int Yamg::get_number_tets()
 {
     return gcells.size()/4;
 }
 
-bool ReservoirMesher::is_rank_master()
-{
-    return p4est->mpirank==0;
-}
-
-void ReservoirMesher::write_vtu(std::string basename)
+void Yamg::write_vtu(std::string basename)
 {
     double tic = MPI_Wtime();
     if(verbose)
-        std::cout<<"INFO: void ReservoirMesher::write_vtu(std::string basename) :: ";
+        std::cout<<"INFO: void Yamg::write_vtu(std::string basename) :: ";
 
     assert(rank==0);
 
@@ -937,17 +818,17 @@ void ReservoirMesher::write_vtu(std::string basename)
     pts->SetNumberOfPoints(NNodes);
 
     for(int i=0; i<NNodes; i++) {
-        pts->SetPoint(i, yamg_get_x(i));
+        pts->SetPoint(i, Yamg::get_point(i));
     }
     ug->SetPoints(pts);
     surface->SetPoints(pts);
 
     int Ntets=gcells.size()/4;
 
-    vtkSmartPointer<vtkDoubleArray> vtk_vp = vtkSmartPointer<vtkDoubleArray>::New();
-    vtk_vp->SetNumberOfComponents(1);
-    vtk_vp->SetName("Vp");
-    vtk_vp->SetNumberOfTuples(Ntets);
+    vtkSmartPointer<vtkDoubleArray> vtk_data = vtkSmartPointer<vtkDoubleArray>::New();
+    vtk_data->SetNumberOfComponents(1);
+    vtk_data->SetName("data");
+    vtk_data->SetNumberOfTuples(Ntets);
 
     ug->Allocate(Ntets);
     vtkSmartPointer<vtkIdList> ids = vtkSmartPointer<vtkIdList>::New();
@@ -962,12 +843,9 @@ void ReservoirMesher::write_vtu(std::string basename)
 
         ug->InsertNextCell(VTK_TETRA, ids);
 
-        const int *n = yamg_get_tet(i);
-        double vp = calculate_cell_vp(n);
-
-        vtk_vp->SetTuple1(i, vp);
+        vtk_data->SetTuple1(i, get_scalar_p0(i));
     }
-    ug->GetCellData()->AddArray(vtk_vp);
+    ug->GetCellData()->AddArray(vtk_data);
 
     vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
     writer->SetCompressorTypeToZLib();
@@ -1018,7 +896,33 @@ void ReservoirMesher::write_vtu(std::string basename)
         std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
 }
 
-void ReservoirMesher::build_facets(std::vector<int> &facets, std::vector<int> &facet_ids)
+void Yamg::write_vti(std::string basename) const
+{
+    std::string filename(basename);
+    filename += ".vti";
+
+    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
+    image->SetDimensions(nx);
+    image->SetOrigin(ox);
+    image->SetSpacing(dx);
+    image->AllocateScalars(VTK_FLOAT, 1);
+
+    int ipos=0;
+    for(int k=0;k<nx[2];k++) {
+        for(int j=0;j<nx[1];j++) {
+            for(int i=0;i<nx[0];i++) {
+                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
+            }
+        }
+    }
+
+    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
+    image_writer->SetFileName(filename.c_str());
+    image_writer->SetInputData(image);
+    image_writer->Write();
+}
+
+void Yamg::build_facets(std::vector<int> &facets, std::vector<int> &facet_ids)
 {
     int NTetra = get_number_tets();
 
@@ -1034,11 +938,11 @@ void ReservoirMesher::build_facets(std::vector<int> &facets, std::vector<int> &f
     }
 }
 
-void ReservoirMesher::write_gmsh(std::string basename)
+void Yamg::write_gmsh(std::string basename)
 {
     double tic = MPI_Wtime();
     if(verbose)
-        std::cout<<"INFO: void ReservoirMesher::write_gmsh(std::string basename="<<basename<<") :: ";
+        std::cout<<"INFO: void Yamg::write_gmsh(std::string basename="<<basename<<") :: ";
 
     int NNodes = gcoords.size()/3;
     int NTetra = gcells.size()/4;
@@ -1078,7 +982,7 @@ void ReservoirMesher::write_gmsh(std::string basename)
         <<"0"<<std::endl
         <<"0"<<std::endl;
     for(int i=0; i<NTetra; i++) {
-        file<<i+1<<" "<<calculate_cell_vp(gcells.data()+i*4)<<std::endl;
+        file<<i+1<<" "<<Yamg::get_scalar_p0(i)<<std::endl;
     }
     file<<"$EndElementData"<<std::endl;
 
@@ -1088,7 +992,7 @@ void ReservoirMesher::write_gmsh(std::string basename)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
-void ReservoirMesher::sanity_facet(const int *facet) const
+void Yamg::sanity_facet(const int *facet) const
 {
     if(!debugging)
         return;
@@ -1098,11 +1002,11 @@ void ReservoirMesher::sanity_facet(const int *facet) const
         assert(facet[i]<gcoords.size()/3);
 
         assert(facet[i]!=facet[(i+1)%3]);
-        assert(edge_length(yamg_get_x(facet[i]), yamg_get_x(facet[(i+1)%3]))>std::numeric_limits<double>::epsilon());
+        assert(edge_length(Yamg::get_point(facet[i]), Yamg::get_point(facet[(i+1)%3]))>std::numeric_limits<double>::epsilon());
     }
 }
 
-void ReservoirMesher::sanity_mesh(const char *file, int line) const
+void Yamg::sanity_mesh(const char *file, int line) const
 {
     if(!debugging)
         return;
@@ -1117,7 +1021,7 @@ void ReservoirMesher::sanity_mesh(const char *file, int line) const
     int NTetra = gcells.size()/4;
 
     for(int i=0; i<NTetra; i++) {
-        const int *n = yamg_get_tet(i);
+        const int *n = Yamg::get_tet(i);
 
         for(int j=0; j<4; j++) {
             assert(n[j]>=0);
@@ -1135,7 +1039,7 @@ void ReservoirMesher::sanity_mesh(const char *file, int line) const
     }
 }
 
-double ReservoirMesher::total_volume() const{
+double Yamg::total_volume() const{
     long double vol=0;
     int NTetra = gcells.size()/4;
     for(int i=0; i<NTetra; i++) {
@@ -1145,7 +1049,7 @@ double ReservoirMesher::total_volume() const{
     return vol;
 }
 
-double ReservoirMesher::total_area() const {
+double Yamg::total_area() const {
     long double area=0;
     int NTetra = gcells.size()/4;
     int facet[3];
@@ -1154,9 +1058,9 @@ double ReservoirMesher::total_area() const {
             get_element_facet(i, j, facet);
 
             if(boundary[i*4+j]>=0) {
-                const double *x0 = yamg_get_x(facet[0]);
-                const double *x1 = yamg_get_x(facet[1]);
-                const double *x2 = yamg_get_x(facet[2]);
+                const double *x0 = Yamg::get_point(facet[0]);
+                const double *x1 = Yamg::get_point(facet[1]);
+                const double *x2 = Yamg::get_point(facet[2]);
                 area += tri_area(x0, x1, x2);
             }
         }
@@ -1165,7 +1069,7 @@ double ReservoirMesher::total_area() const {
     return area;
 }
 
-void ReservoirMesher::dump_stats(std::string tag)
+void Yamg::dump_stats(std::string tag)
 {
     int NTetra = gcells.size()/4;
     double vol = total_volume();
@@ -1180,5 +1084,4 @@ void ReservoirMesher::dump_stats(std::string tag)
 
     std::cout<<"Total volume: "<<vol<<" (error="<<exact_volume-vol<<")"<<std::endl;
     std::cout<<"Total area: "<<area<<" (error="<<exact_area-area<<")"<<std::endl;
-
 }

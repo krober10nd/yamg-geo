@@ -75,14 +75,12 @@ endif()
 
 include_directories(include ${CMAKE_BINARY_DIR}/include)
 
-set(CXX_SOURCES src/ReservoirMesher.cpp)
+set(CXX_SOURCES src/Yamg.cpp)
 
 # target_link_library
-add_library(yamg_reservoir SHARED ${CXX_SOURCES})
-target_link_libraries(yamg_reservoir ${YAMG_LIBRARIES})
+add_library(yamg SHARED ${CXX_SOURCES})
+target_link_libraries(yamg ${YAMG_LIBRARIES})
 
-#install(FILES libyamg_reservoir.so DESTINATION lib)
-
-ADD_EXECUTABLE(yamg src/yamg.cpp)
-TARGET_LINK_LIBRARIES(yamg ${YAMG_LIBRARIES} yamg_reservoir)
+ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
+TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
 
