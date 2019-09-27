@@ -1,4 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
+# accept the silly policy to enable the use of _root vars
+CMAKE_POLICY(SET CMP0074 NEW)
 PROJECT(YAMG)
 
 # The version number.
@@ -11,6 +13,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+enable_language(C) 
 enable_language(CXX)
 
 set (YAMG_LIBRARIES)
@@ -73,17 +76,16 @@ if(MPI_FOUND)
   add_definitions(-DMPI_FOUND)
 endif()
 
-include_directories(include ${CMAKE_BINARY_DIR}/include)
+include_directories(include ${CMAKE_SOURCE_DIR}/include)
 
-set(CXX_SOURCES src/Yamg.cpp)
+set(CXX_SOURCES ${CMAKE_SOURCE_DIR}/src/Yamg.cpp)
 
 # target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
 target_link_libraries(yamg ${YAMG_LIBRARIES})
 
-ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
+# add tests 
+#ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
+
+ADD_EXECUTABLE(yamg-vp ${CMAKE_SOURCE_DIR}/src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
-
-ADD_EXECUTABLE(yamg-01 src/yamg-01.cpp)
-TARGET_LINK_LIBRARIES(yamg-01 ${YAMG_LIBRARIES} yamg)
-

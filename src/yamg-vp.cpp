@@ -22,21 +22,25 @@ double __yamg_scale=200.0;
 
 double vp_sw=1484.0; // Velocity of sound in sea water
 
+// marked for deletion, will use python to accomplish this
 void read_velocity_file(Yamg &mesher, std::string filename)
 {
-    /*
-        scaling info:
-        H0.vel contains velocities vp in m/s
-        a length scale is typically  scale*vp/1500
-        with scale, for instance, 100, 50, 25, 10 or 5 m.
+    ///*
+    //    scaling info:
+    //    H0.vel contains velocities vp in m/s
+    //    a length scale is typically  scale*vp/1500
+    //    with scale, for instance, 100, 50, 25, 10 or 5 m.
 
-        unformatted file, little-endian, with
-         3 doubles for ox (origin in x,y,z),
-         3 doubles for dx (spacing in x,y,z),
-         3 4-byte ints for nx (gridpoints in x,y,z),
-         nx(1)*nx(2)*nx(3) 4-byte floats for velocity vp,
-           x is fastest index, z is slowest
-    */
+    //    unformatted file, little-endian, with
+    //     3 doubles for ox (origin in x,y,z),
+    //     3 doubles for dx (spacing in x,y,z),
+    //     3 4-byte ints for nx (gridpoints in x,y,z),
+    //     nx(1)*nx(2)*nx(3) 4-byte floats for velocity vp,
+    //       x is fastest index, z is slowest
+    //*/
+    //
+    //
+
     std::ifstream input(filename.c_str(), std::ios::binary);
     std::vector<float> data;
     double origin[3], spacing[3];
@@ -127,7 +131,7 @@ int parse_arguments(int *argc, char ***argv, Yamg &mesher)
     std::string filename((*argv)[*argc-1]);
     struct stat buffer;   
     if(stat (filename.c_str(), &buffer) == 0) {
-        read_velocity_file(mesher, filename);
+      read_velocity_file(mesher, filename);
     }else{
         std::cerr<<"ERROR: missing velocity file"<<std::endl;
         usage(*argv[0]);
@@ -178,23 +182,25 @@ int main(int argc, char **argv)
     // Initialise MPI and P4EST.
     Yamg mesher(&argc, &argv);
 
+    // and read in vp from segy file
     parse_arguments(&argc, &argv, mesher);
 
     std::string basename("basename");
 
-    mesher.write_vti(basename);
+    //mesher.write_vti(basename);
 
     mesher.init_domain();
 
     // Refine p4est to geometry
     mesher.refine_p4est(refine_fn);
 
-    // Generate tetrahedra
+    // Generate tetrahedra from quads 
     mesher.triangulate();
 
     mesher.sanity_mesh(__FILE__, __LINE__);
 
     mesher.write_vtu(basename);
+
     mesher.write_gmsh(basename);
 
     mesher.dump_stats("this is the end");

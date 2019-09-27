@@ -40,6 +40,7 @@ std::vector<double> gcoords;
 std::vector<int> gcells;
 std::vector<int> boundary;
 
+// return a point to an integer indicating the start of a point 
 const double *Yamg::get_point(int nid) const
 {
     assert(nid>=0);
@@ -47,6 +48,7 @@ const double *Yamg::get_point(int nid) const
     return gcoords.data()+nid*3;
 }
 
+// return pointer to an integer indicating the start of the tet
 const int *Yamg::get_tet(int eid)
 {
     assert(eid>=0);
@@ -77,6 +79,7 @@ long double Yamg::tet_volume(int e)
     return v;
 }
 
+// add to the facet table list and update the boundary connectivity 
 void Yamg::append_cell(int n0, int n1, int n2, int n3,
                        int b0, int b1, int b2, int b3) {
      gcells.push_back(n0);
@@ -93,6 +96,7 @@ void Yamg::append_cell(int n0, int n1, int n2, int n3,
      assert(Yamg::tet_volume(gcells.size()/4-1)>0);
 }
 
+// better name for this? 
 float Yamg::get_scalar(int i, int j, int k)
 {
     i = std::min(i, nx[0]-1);
@@ -102,6 +106,7 @@ float Yamg::get_scalar(int i, int j, int k)
     return data[k*nx[0]*nx[1]+j*nx[0]+i];
 }
 
+// it isn't clear what there's too functions named identically 
 float Yamg::get_scalar(double x, double y, double z) const
 {
     int i = (x-ox[0])/dx[0];
@@ -124,6 +129,7 @@ float Yamg::get_scalar_p0(int eid) const{
     return value/cnt;
 }
 
+// set up inputs 
 void Yamg::set_data(const std::vector<float> &data_in, const double *origin, const double *spacing, const int *dims)
 {
     data = data_in;
@@ -145,6 +151,7 @@ void Yamg::set_data(const std::vector<float> &data_in, const double *origin, con
     hash_trusty=false;
 }
 
+// calculate the 2-norm length of the tets. 
 double edge_length(const double *x0, const double *x1)
 {
     return sqrt((x0[0] - x1[0])*(x0[0] - x1[0])+
@@ -180,11 +187,15 @@ long double tri_area(const double *x1, const double *x2, const double *x3) {
     return std::sqrt(s*(s-a)*(s-b)*(s-c));
 }
 
+
+// populates boundary_id 
+// generates an index_range for the vector gcoords
 void Yamg::generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4est_quadrant_t *quad, double *x, int *boundary_id, int *index_range)
 {
     assert(P4EST_CHILDREN==8); // not pretending this is general
 
     p4est_quadrant_t node;
+    // loop over all the children of the node 
     for (int i=0; i<P4EST_CHILDREN; ++i) {
 
         p4est_quadrant_corner_node (quad, i, &node);
@@ -197,6 +208,7 @@ void Yamg::generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, cons
             boundary_id[i] = -1;
         }
 
+        // if quad is on boundary, label neighbor face as current face. 
         for(int face=0;face<6;face++) {
             p4est_quadrant_t r;
             p4est_topidx_t neighbor = p4est_quadrant_face_neighbor_extra(quad, treeid, face, &r, NULL, p4est->connectivity);
@@ -241,12 +253,17 @@ long long coord_hash(double x, double y, double z)
     return unn;
 }
 
-/* Take a brick, look at its neighbours and figure out if there are split edges, triangulate.
- */
+// The refinement cases. 
+// the brick numbering is ordered in a z-pattern (bottom then top) 
+// Take a brick, look at its neighbours and figure out if there are split edges, triangulate.
+// note: cavity here means a quad otherwise referred to as a brick 
+// note: the leading underscore "_blah" indicates a member variable 
 void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
 {
-    double quad[3*8];
-    int _boundary[6];
+    double quad[3*8]; // x,y,z coodinates for all octants
+    int _boundary[6]; // there are 6 faces per quad 
+
+    // _boundary is populated in this call... 
     Yamg::generate_quadcoords(info->p4est, info->treeid, info->quad, quad, _boundary, NULL);
 
     // Create a local table from local node numbers to unique (global) node number.
@@ -261,18 +278,22 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
         _lnn2unn.insert({lnn[i], unn[i]});
     }
 
+    // note 2nd dimension of cavity starts at -1 
     std::vector<int> cavity(12*6, -1), cavity_boundary(12);
 
     // Two triangular facets on the -x side of brick
     cavity[0] = lnn[0];
     cavity[1] = lnn[2];
     cavity[2] = lnn[6];
+    // asserts check if the faces are ccw 
     assert(gcoords[lnn[6]*3+1]-gcoords[lnn[0]*3+1] + gcoords[lnn[6]*3+2]-gcoords[lnn[0]*3+2] > 0);
 
     cavity[6] = lnn[0];
     cavity[7] = lnn[6];
     cavity[8] = lnn[4];
 
+    // this is the quad that abuts this face 
+    // there are two triangles per face 
     cavity_boundary[0] = _boundary[0];
     cavity_boundary[1] = _boundary[0];
 
@@ -340,7 +361,10 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
     cavity_boundary[11] = _boundary[5];
 
     // Check for split edges.
+    // why would the edge be split?
     bool insert_center_point=false;
+    // loop over all triangles in cavity  
+    // skipping empty slots 
     for(int i=0; i<12; i++) {
         int *triangle=cavity.data()+i*6;
         for(int j=0; j<3; j++) {
@@ -360,7 +384,9 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
     }
 
     if(insert_center_point) {
-        // Create and append centre point
+        // Create and append centre point of quad 
+        // lnn[0] is bot left corner 
+        // lnn[7] is top right 
         double x[]= {(gcoords[lnn[0]*3  ]+gcoords[lnn[7]*3  ])*0.5,
                      (gcoords[lnn[0]*3+1]+gcoords[lnn[7]*3+1])*0.5,
                      (gcoords[lnn[0]*3+2]+gcoords[lnn[7]*3+2])*0.5
@@ -369,6 +395,7 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
         long long _unn = coord_hash(x[0], x[1], x[2]);
         assert(unn2lnn.find(_unn)==unn2lnn.end());
 
+        // new id for center of brick
         int cid = gcoords.size()/3;
         unn2lnn.insert({_unn, cid});
         lnn2unn.push_back(_unn);
@@ -382,12 +409,14 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
         for(int i=0; i<12; i++) {
             // Count number of edges cut in this reference triangle.
             int cutcnt=0;
+            //  empty slot in cavity array 
             for(int j=3; j<6; j++) {
                 if(cavity[i*6+j]!=-1)
                     cutcnt++;
             }
 
             if(cutcnt==0) {
+                // add a new ccw orientated triangle to cavity that borders facet i
                 Yamg::append_cell(cavity[i*6+1], cavity[i*6+0], cavity[i*6+2], cid,
                                              -1, -1, -1, cavity_boundary[i]);
             } else if(cutcnt==1) {
@@ -395,6 +424,8 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
                 for(int j=0; j<3; j++) {
                     if(cavity[i*6+3+j]!=-1) {
                         for(int k=0; k<3; k++) {
+                            // need to analyze this why is there j+k?
+                            // mod(j+k,3) will always yield answer < j+k 
                             ref_copy[k  ] = cavity[i*6+(j+k)%3];
                             ref_copy[k+3] = cavity[i*6+3+(j+k)%3];
                         }
@@ -467,6 +498,7 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
     }
 }
 
+// 
 extern "C" {
     void create_verts (p4est_iter_volume_info_t * info, void *user_data)
     {
@@ -476,6 +508,7 @@ extern "C" {
         // Insert these points
         for(int i=0; i<8; i++) {
             long long unn = coord_hash(quad[i*3], quad[i*3+1], quad[i*3+2]);
+            // ensure point is unique 
             if(unn2lnn.count(unn)==0) {
                 int lnn = gcoords.size()/3;
                 unn2lnn[unn] = lnn;
@@ -489,9 +522,10 @@ extern "C" {
     }
 }
 
+// class constructor (should this be up top?) 
 Yamg::Yamg(int *argc, char ***argv)
 {
-    // Initialise MPI
+    // Initialise MPI for p4est 
     int mpiret = sc_MPI_Init (argc, argv);
     SC_CHECK_MPI (mpiret);
 
@@ -515,18 +549,22 @@ Yamg::Yamg(int *argc, char ***argv)
     assert(rank==0);
 }
 
+//
 Yamg::~Yamg() {}
 
+//
 void Yamg::enable_debugging()
 {
     debugging = true;
 }
 
+//
 void Yamg::enable_verbose()
 {
     verbose = true;
 }
 
+//
 void Yamg::finalise()
 {
     if(verbose && rank==0)
@@ -554,6 +592,7 @@ void Yamg::finalise()
     SC_CHECK_MPI (mpiret);
 }
 
+//
 void Yamg::init_domain()
 {
     init_coord_hash();
@@ -575,6 +614,7 @@ int Yamg::init_coord_hash()
     return 0;
 }
 
+// 
 void Yamg::create_p4est()
 {
     // Determine a sensible coarse element size.
@@ -665,6 +705,7 @@ void Yamg::create_p4est()
     p4est_connectivity_complete (conn);
 }
 
+// member function to decide whether or not to refine the quad 
 void Yamg::refine_p4est(p4est_refine_t refine_fn)
 {
     double tic = MPI_Wtime();
@@ -680,6 +721,7 @@ void Yamg::refine_p4est(p4est_refine_t refine_fn)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
+// 
 void Yamg::triangulate()
 {
     double tic = MPI_Wtime();
@@ -702,6 +744,7 @@ void Yamg::triangulate()
                    NULL,
                    NULL);
 
+    // local node number to unique node number 
     unn2lnn.clear();
     int ntets = gcells.size()/4;
     for(int i=0; i<ntets; i++) {
@@ -720,6 +763,7 @@ void Yamg::triangulate()
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
+// construct facets, eid is the element id, fid is the face id 
 void Yamg::get_element_facet(int eid, int fid, int facet[3]) const
 {
     assert(eid>=0);
@@ -753,6 +797,24 @@ void Yamg::get_element_facet(int eid, int fid, int facet[3]) const
     }
 }
 
+// create facet table 
+void Yamg::build_facets(std::vector<int> &facets, std::vector<int> &facet_ids)
+{
+    int NTetra = get_number_tets();
+
+    for(int i=0; i<NTetra; i++) {
+        for(int j=0; j<4; j++) {
+            if(boundary[i*4+j]>0) {
+                int facet[3];
+                get_element_facet(i, j, facet);
+                facets.insert(facets.end(), facet, facet+3);
+                facet_ids.push_back(boundary[i*4+j]);
+            }
+        }
+    }
+}
+
+
 #include <sstream>
 
 int Yamg::get_number_points()
@@ -765,6 +827,7 @@ int Yamg::get_number_tets()
     return gcells.size()/4;
 }
 
+//
 void Yamg::write_vtu(std::string basename)
 {
     double tic = MPI_Wtime();
@@ -866,48 +929,34 @@ void Yamg::write_vtu(std::string basename)
         std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
 }
 
-void Yamg::write_vti(std::string basename) const
-{
-    std::string filename(basename);
-    filename += ".vti";
+//// do we need vti files?
+//void Yamg::write_vti(std::string basename) const
+//{
+//    std::string filename(basename);
+//    filename += ".vti";
+//
+//    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
+//    image->SetDimensions(nx);
+//    image->SetOrigin(ox);
+//    image->SetSpacing(dx);
+//    image->AllocateScalars(VTK_FLOAT, 1);
+//
+//    int ipos=0;
+//    for(int k=0;k<nx[2];k++) {
+//        for(int j=0;j<nx[1];j++) {
+//            for(int i=0;i<nx[0];i++) {
+//                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
+//            }
+//        }
+//    }
+//
+//    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
+//    image_writer->SetFileName(filename.c_str());
+//    image_writer->SetInputData(image);
+//    image_writer->Write();
+//}
 
-    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
-    image->SetDimensions(nx);
-    image->SetOrigin(ox);
-    image->SetSpacing(dx);
-    image->AllocateScalars(VTK_FLOAT, 1);
-
-    int ipos=0;
-    for(int k=0;k<nx[2];k++) {
-        for(int j=0;j<nx[1];j++) {
-            for(int i=0;i<nx[0];i++) {
-                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
-            }
-        }
-    }
-
-    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-    image_writer->SetFileName(filename.c_str());
-    image_writer->SetInputData(image);
-    image_writer->Write();
-}
-
-void Yamg::build_facets(std::vector<int> &facets, std::vector<int> &facet_ids)
-{
-    int NTetra = get_number_tets();
-
-    for(int i=0; i<NTetra; i++) {
-        for(int j=0; j<4; j++) {
-            if(boundary[i*4+j]>0) {
-                int facet[3];
-                get_element_facet(i, j, facet);
-                facets.insert(facets.end(), facet, facet+3);
-                facet_ids.push_back(boundary[i*4+j]);
-            }
-        }
-    }
-}
-
+//
 void Yamg::write_gmsh(std::string basename)
 {
     double tic = MPI_Wtime();
@@ -962,6 +1011,8 @@ void Yamg::write_gmsh(std::string basename)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
 
+// debugging  
+// check if facet is valid (valid indexes, number if theoretically possible, length of edge is possible). 
 void Yamg::sanity_facet(const int *facet) const
 {
     if(!debugging)
@@ -976,6 +1027,7 @@ void Yamg::sanity_facet(const int *facet) const
     }
 }
 
+// debugging  
 void Yamg::sanity_mesh(const char *file, int line) const
 {
     if(!debugging)
@@ -1009,6 +1061,7 @@ void Yamg::sanity_mesh(const char *file, int line) const
     }
 }
 
+//
 double Yamg::total_volume() const{
     long double vol=0;
     int NTetra = gcells.size()/4;
@@ -1019,6 +1072,7 @@ double Yamg::total_volume() const{
     return vol;
 }
 
+//
 double Yamg::total_area() const {
     long double area=0;
     int NTetra = gcells.size()/4;
@@ -1039,6 +1093,7 @@ double Yamg::total_area() const {
     return area;
 }
 
+//
 void Yamg::dump_stats(std::string tag)
 {
     int NTetra = gcells.size()/4;
