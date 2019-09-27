@@ -43,7 +43,8 @@ FIND_PACKAGE(VTK NO_MODULE)
 if(VTK_FOUND)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
-  include(${VTK_USE_FILE})
+  include_directories(${VTK_INCLUDES})
+
   set (YAMG_LIBRARIES ${VTK_LIBRARIES} ${YAMG_LIBRARIES})
   add_definitions(-DVTK_FOUND)
 else()
@@ -83,7 +84,3 @@ target_link_libraries(yamg ${YAMG_LIBRARIES})
 
 ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
-
-ADD_EXECUTABLE(yamg-01 src/yamg-01.cpp)
-TARGET_LINK_LIBRARIES(yamg-01 ${YAMG_LIBRARIES} yamg)
-
