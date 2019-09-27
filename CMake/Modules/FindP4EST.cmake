@@ -9,15 +9,17 @@
 ## -----------------------------------------------------------------------------
 ## Check for the header files
 
-find_path (P4EST_INCLUDES p4est.h
-    PATHS /usr/local/include /usr/include /sw/include ${P4EST_ROOT}/include
+find_path (P4EST_INCLUDES 
+    NAMES "p4est.h"
+    PATHS /usr/local/include /usr/include $ENV{P4EST_ROOT}/local/include/
   )
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
-find_library (P4EST_LIBRARIES p4est
-  PATHS /usr/local/lib /usr/lib /lib /sw/lib ${P4EST_ROOT}/lib
+find_library (P4EST_LIBRARIES 
+    NAMES "p4est"
+    PATHS /usr/local/lib /usr/lib /lib $ENV{P4EST_ROOT}/local/lib/
   )
 
 ## -----------------------------------------------------------------------------
