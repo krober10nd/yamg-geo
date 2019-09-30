@@ -1,0 +1,36 @@
+dist: xenial 
+sudo: required
+language: cpp
+compiler:
+  - gcc
+before_install:
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+env:
+  - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
+install:
+    # install p4est (comes with sc) 
+  - sudo apt-get install -y cmake 
+  - wget http://p4est.github.io/release/p4est-2.2.tar.gz
+  - tar -xvf p4est-2.2.tar.gz
+  - cd p4est-2.2
+  - ./configure --enable-mpi
+  - make 
+  - make install 
+  - cd .. 
+   # install vtk 
+  - sudo apt-get install -y libvtk5-dev libvtk5.10
+script:
+  # build yamg-geo
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make 
+  - cd ..
+  # build tests 
+  - cd tests
+  - mkdir build 
+  - cmake ..
+  - make
+
+

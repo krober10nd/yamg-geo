@@ -10,14 +10,14 @@
 ## Check for the header files
 
 find_path (SC_INCLUDES sc.h
-    PATHS /usr/local/include /usr/include /sw/include ${SC_ROOT}/include
+    PATHS /usr/local/include /usr/include ${SC_ROOT}/include
   )
 
 ## -----------------------------------------------------------------------------
 ## Check for the library
 
 find_library (SC_LIBRARIES sc
-  PATHS /usr/local/lib /usr/lib /lib /sw/lib ${SC_ROOT}/lib
+  PATHS /usr/local/lib /usr/lib /lib ${SC_ROOT}/lib
   )
 
 ## -----------------------------------------------------------------------------

@@ -39,8 +39,8 @@ else()
     message(SEND_ERROR, "Cannot find SC - required.")
 endif()
 
-FIND_PACKAGE(VTK NO_MODULE)
-if(VTK_FOUND)
+FIND_PACKAGE(VTK REQUIRED)
+if(HAVE_VTK)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
   include_directories(${VTK_INCLUDES})
@@ -81,6 +81,9 @@ set(CXX_SOURCES src/Yamg.cpp)
 # target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
 target_link_libraries(yamg ${YAMG_LIBRARIES})
+
+# add tests 
+ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
 
 ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
