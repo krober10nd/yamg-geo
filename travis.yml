@@ -1,6 +1,10 @@
 dist: xenial 
 sudo: required
 language: cpp
+# whitelist
+branches:
+  only:
+    - dev
 compiler:
   - gcc
 before_install:
