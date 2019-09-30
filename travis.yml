@@ -9,6 +9,8 @@ before_install:
 env:
   - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
 install:
+    # install mpi 
+  - sudo apt-get install -y openmpi-bin libopenmpi-dev
     # install p4est (comes with sc) 
   - sudo apt-get install -y cmake 
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
