@@ -79,7 +79,7 @@ long double Yamg::tet_volume(int e)
     return v;
 }
 
-// 
+// add to the facet table list and update the boundary connectivity 
 void Yamg::append_cell(int n0, int n1, int n2, int n3,
                        int b0, int b1, int b2, int b3) {
      gcells.push_back(n0);
