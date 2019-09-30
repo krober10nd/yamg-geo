@@ -5,6 +5,10 @@ language: cpp
 branches:
   only:
     - dev
+# blocklist
+branches:
+  except:
+  - master
 compiler:
   - gcc
 before_install:
