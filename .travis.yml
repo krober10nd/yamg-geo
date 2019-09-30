@@ -19,10 +19,11 @@ env:
   - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
   - F77='gfortran' FC='gfortran'
 install:
+    sudo apt-get install gfortran
     # install mpi 
   - sudo apt-get install -y openmpi-bin libopenmpi-dev
-    # install p4est (comes with sc) 
   - sudo apt-get install -y cmake 
+    # install p4est (comes with sc) 
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
   - cd p4est-2.2
