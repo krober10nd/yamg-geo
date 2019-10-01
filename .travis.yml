@@ -12,7 +12,6 @@ before_install:
   - sudo apt-get update -qq
   - test -n $CC && unset CC
 env:
-  - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/
   - F77='gfortran' FC='gfortran'
   - CC='mpicc' CXX='mpic++'
 install:
@@ -25,7 +24,7 @@ install:
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
   - cd p4est-2.2
-  - ./configure --enable-mpi
+  - ./configure --enable-mpi --prefix='/usr/local/'
   - make 
   - make install 
   - cd .. 
