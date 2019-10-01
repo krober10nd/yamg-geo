@@ -13,10 +13,10 @@ before_install:
   - test -n $CC && unset CC
 env:
   - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/
-  - pwd $P4EST_ROOT 
   - F77='gfortran' FC='gfortran'
   - CC='mpicc' CXX='mpic++'
 install:
+  - pwd $P4EST_ROOT 
   - sudo apt-get install gfortran
   - sudo apt-get install -y openmpi-bin libopenmpi-dev
   - sudo apt-get install -y cmake 
