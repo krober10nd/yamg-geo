@@ -30,9 +30,8 @@ install:
   - pwd 
 
    # install vtk 
-  - sudo apt-get install -y libvtk5-dev libvtk5.10
-  - sudo apt-get install -y tcl-vtk
-  - sudo apt-get install -y python-vtk
+  - sudo apt-get install python-vtk libvtk-java tcl-vtk libvtk5-qt4-dev
+
 
    # build yamg-geo
   - mkdir build
