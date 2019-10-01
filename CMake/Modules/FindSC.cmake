@@ -11,7 +11,7 @@
 
 find_path (SC_INCLUDES 
     NAMES "sc.h"
-    PATHS /usr/local/include /usr/include $ENV{SC_ROOT}/include
+    PATHS /usr/local/include /usr/include $ENV{SC_ROOT}/local/include
   )
 
 ## -----------------------------------------------------------------------------
@@ -19,7 +19,7 @@ find_path (SC_INCLUDES
 
 find_library (SC_LIBRARIES 
     NAMES "sc"
-    PATHS /usr/local/lib /usr/lib /lib $ENV{SC_ROOT}/lib
+    PATHS /usr/local/lib /usr/lib /lib $ENV{SC_ROOT}/local/lib
   )
 
 ## -----------------------------------------------------------------------------
