@@ -17,9 +17,9 @@ env:
   - CC='mpicc' CXX='mpic++'
 install:
   - sudo apt-get install gfortran
-    # install mpi 
   - sudo apt-get install -y openmpi-bin libopenmpi-dev
   - sudo apt-get install -y cmake 
+  - sudo apt-get install libblas-dev liblapack-dev
     # install p4est (comes with sc) 
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
