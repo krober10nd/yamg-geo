@@ -41,7 +41,7 @@ else()
     message(SEND_ERROR, "Cannot find SC - required.")
 endif()
 
-FIND_PACKAGE(VTK NO MODULE)
+FIND_PACKAGE(VTK REQUIRED)
 if(HAVE_VTK)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
