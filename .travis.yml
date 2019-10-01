@@ -24,7 +24,7 @@ install:
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
   - cd p4est-2.2
-  - ./configure --enable-mpi --prefix='/usr/local/'
+  - sudo ./configure --enable-mpi --prefix='/usr/local/'
   - make 
   - make install 
   - cd .. 
