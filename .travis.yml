@@ -14,13 +14,10 @@ before_install:
 env:
   - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ F77='gfortran' FC='gfortran'  CC='mpicc' CXX='mpic++'
 install:
-  - echo $P4EST_ROOT 
-  - echo $SC_ROOT 
   - sudo apt-get install gfortran
   - sudo apt-get install -y openmpi-bin libopenmpi-dev
   - sudo apt-get install -y cmake 
   - sudo apt-get install libblas-dev liblapack-dev
-  - sudo apt-get install vtkWrapTcl
 
     # install p4est (comes with sc) 
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
@@ -33,6 +30,7 @@ install:
 
    # install vtk 
   - sudo apt-get install -y libvtk5-dev libvtk5.10
+  - sudo apt-get install tcl-vtk
    
    # build yamg-geo
   - mkdir build
