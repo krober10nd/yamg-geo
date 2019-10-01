@@ -11,7 +11,7 @@
 
 find_path (P4EST_INCLUDES 
     NAMES "p4est.h"
-    PATHS /usr/local/include /usr/include $ENV{P4EST_ROOT}/p4est-2.2/local/include/
+    PATHS /usr/local/include /usr/include $ENV{P4EST_ROOT}/local/include/
   )
 
 ## -----------------------------------------------------------------------------
@@ -19,7 +19,7 @@ find_path (P4EST_INCLUDES
 
 find_library (P4EST_LIBRARIES 
     NAMES "p4est"
-    PATHS /usr/local/lib /usr/lib /lib $ENV{P4EST_ROOT}/p4est-2.2/local/lib/
+    PATHS /usr/local/lib /usr/lib /lib $ENV{P4EST_ROOT}/local/lib/
   )
 
 ## -----------------------------------------------------------------------------
