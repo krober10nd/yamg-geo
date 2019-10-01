@@ -12,7 +12,7 @@ before_install:
   - sudo apt-get update -qq
   - test -n $CC && unset CC
 env:
-  - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
+  - P4EST_ROOT='../p4est-2.2/' SC_ROOT='../p4est-2.2/'
   - F77='gfortran' FC='gfortran'
   - CC='mpicc' CXX='mpic++'
 install:
