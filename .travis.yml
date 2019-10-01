@@ -12,6 +12,8 @@ before_install:
   - sudo apt-get update -qq
   - test -n $CC && unset CC
 env:
+  - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/
+  - pwd $P4EST_ROOT 
   - F77='gfortran' FC='gfortran'
   - CC='mpicc' CXX='mpic++'
 install:
@@ -24,7 +26,7 @@ install:
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
   - cd p4est-2.2
-  - sudo ./configure --enable-mpi --prefix='/usr/local/'
+  - ./configure --enable-mpi
   - make 
   - make install 
   - cd .. 
@@ -35,7 +37,7 @@ script:
   # build yamg-geo
   - mkdir build
   - cd build
-  - cmake ..
+  - cmake .. -DP4EST_ROOT=$P4EST_ROOT -DSC_ROOT=$SC_ROOT 
   - make 
   - cd ..
   # build tests 
