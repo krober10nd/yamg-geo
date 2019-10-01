@@ -12,7 +12,8 @@ before_install:
   - sudo apt-get update -qq
   - test -n $CC && unset CC
 env:
-  - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/
+  - export P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ 
+  - export SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/
   - F77='gfortran' FC='gfortran'
   - CC='mpicc' CXX='mpic++'
 install:
@@ -33,17 +34,20 @@ install:
 
    # install vtk 
   - sudo apt-get install -y libvtk5-dev libvtk5.10
-script:
-  # build yamg-geo
+   
+   # build yamg-geo
   - mkdir build
   - cd build
-  - cmake .. -DP4EST_ROOT=$P4EST_ROOT -DSC_ROOT=$SC_ROOT 
+  - cmake ..
   - make 
   - cd ..
+
   # build tests 
   - cd tests
   - mkdir build 
   - cmake ..
   - make
 
+script:
+  - ./bin/test_Area 
 
