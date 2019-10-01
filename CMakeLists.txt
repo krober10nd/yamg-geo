@@ -1,4 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
+# accept the silly policy to enable the use of _root vars
+CMAKE_POLICY(SET CMP0074 NEW)
 PROJECT(YAMG)
 
 # The version number.
@@ -39,7 +41,7 @@ else()
     message(SEND_ERROR, "Cannot find SC - required.")
 endif()
 
-FIND_PACKAGE(VTK REQUIRED)
+FIND_PACKAGE(VTK NO MODULE)
 if(HAVE_VTK)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
