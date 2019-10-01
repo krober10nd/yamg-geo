@@ -33,7 +33,6 @@ install:
   - sudo apt-get install -y tcl-vtk
   - sudo apt-get install -y python-vtk
 
-   
    # build yamg-geo
   - mkdir build
   - cd build
@@ -44,8 +43,10 @@ install:
   # build tests 
   - cd tests
   - mkdir build 
+  - cd build 
   - cmake ..
   - make
+  - cd ..
 
 script:
   - ./bin/test_Area 
