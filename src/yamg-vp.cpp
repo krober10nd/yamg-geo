@@ -199,9 +199,8 @@ int main(int argc, char **argv)
 
     mesher.sanity_mesh(__FILE__, __LINE__);
 
-//#ifdef HAVE_VTK
-//    mesher.write_vtu(basename);
-//#endif
+    mesher.write_vtu(basename);
+
     mesher.write_gmsh(basename);
 
     mesher.dump_stats("this is the end");

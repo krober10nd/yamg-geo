@@ -19,7 +19,7 @@ install:
   - sudo apt-get install -y cmake 
   - sudo apt-get install -y libblas-dev liblapack-dev
 
-    # install p4est (comes with sc) 
+    # install p4est (and sc) 
   - wget http://p4est.github.io/release/p4est-2.2.tar.gz
   - tar -xvf p4est-2.2.tar.gz
   - cd p4est-2.2
@@ -27,11 +27,9 @@ install:
   - make 
   - make install 
   - cd .. 
-  - pwd 
 
    # install vtk 
   - sudo apt-get install python-vtk libvtk-java tcl-vtk libvtk5-qt4-dev
-
 
    # build yamg-geo
   - mkdir build
@@ -40,9 +38,7 @@ install:
   - make 
   - cd ..
   
-  - pwd  
-
-  # build tests 
+  # build tests for yamg-geo
   - cd tests
   - mkdir build 
   - cd build 

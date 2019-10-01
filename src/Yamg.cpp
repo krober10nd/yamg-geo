@@ -828,106 +828,106 @@ int Yamg::get_number_tets()
 }
 
 //
-//void Yamg::write_vtu(std::string basename)
-//{
-//    double tic = MPI_Wtime();
-//    if(verbose)
-//        std::cout<<"INFO: void Yamg::write_vtu(std::string basename) :: ";
-//
-//    assert(rank==0);
-//
-//    int NNodes=gcoords.size()/3;
-//
-//    std::string filename(basename);
-//    filename += ".vtu";
-//
-//    NNodes=gcoords.size()/3;
-//
-//    vtkSmartPointer<vtkUnstructuredGrid> ug = vtkSmartPointer<vtkUnstructuredGrid>::New();
-//    vtkSmartPointer<vtkUnstructuredGrid> surface = vtkSmartPointer<vtkUnstructuredGrid>::New();
-//
-//    // Set points
-//    vtkSmartPointer<vtkPoints> pts = vtkSmartPointer<vtkPoints>::New();
-//    pts->SetNumberOfPoints(NNodes);
-//
-//    for(int i=0; i<NNodes; i++) {
-//        pts->SetPoint(i, Yamg::get_point(i));
-//    }
-//    ug->SetPoints(pts);
-//    surface->SetPoints(pts);
-//
-//    int Ntets=gcells.size()/4;
-//
-//    vtkSmartPointer<vtkDoubleArray> vtk_data = vtkSmartPointer<vtkDoubleArray>::New();
-//    vtk_data->SetNumberOfComponents(1);
-//    vtk_data->SetName("data");
-//    vtk_data->SetNumberOfTuples(Ntets);
-//
-//    ug->Allocate(Ntets);
-//    vtkSmartPointer<vtkIdList> ids = vtkSmartPointer<vtkIdList>::New();
-//    ids->SetNumberOfIds(4);
-//    for(int i=0; i<Ntets; i++) {
-//        assert(gcells[i*4]>=0);
-//
-//        ids->SetId(0, gcells[i*4]);
-//        ids->SetId(1, gcells[i*4+1]);
-//        ids->SetId(2, gcells[i*4+3]);
-//        ids->SetId(3, gcells[i*4+2]);
-//
-//        ug->InsertNextCell(VTK_TETRA, ids);
-//
-//        vtk_data->SetTuple1(i, get_scalar_p0(i));
-//    }
-//    ug->GetCellData()->AddArray(vtk_data);
-//
-//    vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-//    writer->SetCompressorTypeToZLib();
-//    writer->SetDataModeToBinary();
-//
-//    writer->SetFileName(filename.c_str());
-//
-//#if VTK_MAJOR_VERSION <= 5
-//    writer->SetInput(ug);
-//#else
-//    writer->SetInputData(ug);
-//#endif
-//    writer->Write();
-//
-//    vtkSmartPointer<vtkIntArray> vtk_boundary = vtkSmartPointer<vtkIntArray>::New();
-//    vtk_boundary->SetNumberOfComponents(1);
-//    vtk_boundary->SetName("boundary");
-//    vtk_boundary->SetNumberOfTuples(Ntets*4);
-//
-//    surface->Allocate(Ntets*4);
-//    vtkSmartPointer<vtkIdList> ids_tri = vtkSmartPointer<vtkIdList>::New();
-//    ids_tri->SetNumberOfIds(3);
-//    for(int i=0; i<Ntets; i++) {
-//        for(int j=0;j<4;j++) {
-//            for(int k=0;k<3;k++) {
-//                ids_tri->SetId(k, gcells[i*4+(j+1+k)%4]);
-//            }
-//            vtk_boundary->SetTuple1(i*4+j, boundary[i*4+j]);
-//            surface->InsertNextCell(VTK_TRIANGLE, ids_tri);
-//        }
-//    }
-//    surface->GetCellData()->AddArray(vtk_boundary);
-//
-//    vtkSmartPointer<vtkXMLUnstructuredGridWriter> swriter = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-//    swriter->SetCompressorTypeToZLib();
-//    swriter->SetDataModeToBinary();
-//
-//    swriter->SetFileName("surface.vtu");
-//
-//#if VTK_MAJOR_VERSION <= 5
-//    swriter->SetInput(surface);
-//#else
-//    swriter->SetInputData(surface);
-//#endif
-//    swriter->Write();
-//
-//    if(verbose)
-//        std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
-//}
+void Yamg::write_vtu(std::string basename)
+{
+    double tic = MPI_Wtime();
+    if(verbose)
+        std::cout<<"INFO: void Yamg::write_vtu(std::string basename) :: ";
+
+    assert(rank==0);
+
+    int NNodes=gcoords.size()/3;
+
+    std::string filename(basename);
+    filename += ".vtu";
+
+    NNodes=gcoords.size()/3;
+
+    vtkSmartPointer<vtkUnstructuredGrid> ug = vtkSmartPointer<vtkUnstructuredGrid>::New();
+    vtkSmartPointer<vtkUnstructuredGrid> surface = vtkSmartPointer<vtkUnstructuredGrid>::New();
+
+    // Set points
+    vtkSmartPointer<vtkPoints> pts = vtkSmartPointer<vtkPoints>::New();
+    pts->SetNumberOfPoints(NNodes);
+
+    for(int i=0; i<NNodes; i++) {
+        pts->SetPoint(i, Yamg::get_point(i));
+    }
+    ug->SetPoints(pts);
+    surface->SetPoints(pts);
+
+    int Ntets=gcells.size()/4;
+
+    vtkSmartPointer<vtkDoubleArray> vtk_data = vtkSmartPointer<vtkDoubleArray>::New();
+    vtk_data->SetNumberOfComponents(1);
+    vtk_data->SetName("data");
+    vtk_data->SetNumberOfTuples(Ntets);
+
+    ug->Allocate(Ntets);
+    vtkSmartPointer<vtkIdList> ids = vtkSmartPointer<vtkIdList>::New();
+    ids->SetNumberOfIds(4);
+    for(int i=0; i<Ntets; i++) {
+        assert(gcells[i*4]>=0);
+
+        ids->SetId(0, gcells[i*4]);
+        ids->SetId(1, gcells[i*4+1]);
+        ids->SetId(2, gcells[i*4+3]);
+        ids->SetId(3, gcells[i*4+2]);
+
+        ug->InsertNextCell(VTK_TETRA, ids);
+
+        vtk_data->SetTuple1(i, get_scalar_p0(i));
+    }
+    ug->GetCellData()->AddArray(vtk_data);
+
+    vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+    writer->SetCompressorTypeToZLib();
+    writer->SetDataModeToBinary();
+
+    writer->SetFileName(filename.c_str());
+
+#if VTK_MAJOR_VERSION <= 5
+    writer->SetInput(ug);
+#else
+    writer->SetInputData(ug);
+#endif
+    writer->Write();
+
+    vtkSmartPointer<vtkIntArray> vtk_boundary = vtkSmartPointer<vtkIntArray>::New();
+    vtk_boundary->SetNumberOfComponents(1);
+    vtk_boundary->SetName("boundary");
+    vtk_boundary->SetNumberOfTuples(Ntets*4);
+
+    surface->Allocate(Ntets*4);
+    vtkSmartPointer<vtkIdList> ids_tri = vtkSmartPointer<vtkIdList>::New();
+    ids_tri->SetNumberOfIds(3);
+    for(int i=0; i<Ntets; i++) {
+        for(int j=0;j<4;j++) {
+            for(int k=0;k<3;k++) {
+                ids_tri->SetId(k, gcells[i*4+(j+1+k)%4]);
+            }
+            vtk_boundary->SetTuple1(i*4+j, boundary[i*4+j]);
+            surface->InsertNextCell(VTK_TRIANGLE, ids_tri);
+        }
+    }
+    surface->GetCellData()->AddArray(vtk_boundary);
+
+    vtkSmartPointer<vtkXMLUnstructuredGridWriter> swriter = vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
+    swriter->SetCompressorTypeToZLib();
+    swriter->SetDataModeToBinary();
+
+    swriter->SetFileName("surface.vtu");
+
+#if VTK_MAJOR_VERSION <= 5
+    swriter->SetInput(surface);
+#else
+    swriter->SetInputData(surface);
+#endif
+    swriter->Write();
+
+    if(verbose)
+        std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
+}
 
 //// do we need vti files?
 //void Yamg::write_vti(std::string basename) const
