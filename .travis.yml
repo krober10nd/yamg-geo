@@ -6,7 +6,7 @@ branches:
   only:
     - dev
 compiler:
-  - mpicc
+  - gcc
 before_install:
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo apt-get update -qq
@@ -14,7 +14,7 @@ before_install:
 env:
   - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
   - F77='gfortran' FC='gfortran'
-  - CC='mpicc' CXX='mpicc'
+  - CC='mpicc' CXX='mpic++'
 install:
   - sudo apt-get install gfortran
     # install mpi 
