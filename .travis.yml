@@ -19,6 +19,7 @@ env:
   - P4EST_ROOT='./p4est-2.2/' SC_ROOT='./p4est-2.2/'
   - F77='gfortran' FC='gfortran'
 install:
+    # b
     # try installing gfortran, doesn't seem to work with p4est?
     sudo apt-get install gfortran
     # install mpi 
