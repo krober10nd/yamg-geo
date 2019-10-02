@@ -10,7 +10,7 @@
 ## Check for the header files
 
 find_path (VTK_INCLUDES 
-    NAMES "vtk5-qt4-dev.h"
+    NAMES "libvtkCommon.h"
     PATHS /usr/local/include /usr/include $ENV{VTK_ROOT}/include
   )
 
@@ -18,7 +18,7 @@ find_path (VTK_INCLUDES
 ## Check for the library
 
 find_library (VTK_LIBRARIES 
-    NAMES "vtk5-qt4-dev"
+    NAMES "libvtkCommon"
     PATHS /usr/local/lib /usr/lib /lib $ENV{VTK_ROOT}/lib
   )
 
