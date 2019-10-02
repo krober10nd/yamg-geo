@@ -75,16 +75,16 @@ if(MPI_FOUND)
   add_definitions(-DMPI_FOUND)
 endif()
 
-include_directories(include ${CMAKE_BINARY_DIR}/include)
+include_directories(include ${CMAKE_SOURCE_DIR}/include)
 
-set(CXX_SOURCES ${CMAKE_BINARY_DIR}/src/Yamg.cpp)
+set(CXX_SOURCES ${CMAKE_SOURCE_DIR}/src/Yamg.cpp)
 
 # target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
 target_link_libraries(yamg ${YAMG_LIBRARIES})
 
 # add tests 
-ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
+#ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
 
-ADD_EXECUTABLE(yamg-vp ${CMAKE_BINARY_DIR}/src/yamg-vp.cpp)
+ADD_EXECUTABLE(yamg-vp ${CMAKE_SOURCE_DIR}/src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
