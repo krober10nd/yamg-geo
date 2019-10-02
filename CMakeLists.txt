@@ -77,7 +77,7 @@ endif()
 
 include_directories(include ${CMAKE_BINARY_DIR}/include)
 
-set(CXX_SOURCES src/Yamg.cpp)
+set(CXX_SOURCES ${CMAKE_BINARY_DIR}/Yamg.cpp)
 
 # target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
@@ -86,5 +86,5 @@ target_link_libraries(yamg ${YAMG_LIBRARIES})
 # add tests 
 ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
 
-ADD_EXECUTABLE(yamg-vp src/yamg-vp.cpp)
+ADD_EXECUTABLE(yamg-vp ${CMAKE_BINARY_DIR}/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
