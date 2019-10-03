@@ -1,0 +1,55 @@
+dist: xenial 
+sudo: required
+language: cpp
+# whitelist
+branches:
+  only:
+    - dev
+compiler:
+  - gcc
+before_install:
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+  - test -n $CC && unset CC
+env:
+  - P4EST_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ SC_ROOT=$TRAVIS_BUILD_DIR/p4est-2.2/ F77='gfortran' FC='gfortran'  CC='mpicc' CXX='mpic++'
+install:
+  - sudo apt-get install -y gfortran
+  - sudo apt-get install -qq gcc-5 g++-5
+  - sudo apt-get install -y openmpi-bin libopenmpi-dev
+  - sudo apt-get install -y cmake 
+  - sudo apt-get install -y libblas-dev liblapack-dev
+
+    # install p4est (and sc) 
+  - wget http://p4est.github.io/release/p4est-2.2.tar.gz
+  - tar -xvf p4est-2.2.tar.gz
+  - cd p4est-2.2
+  - ./configure --enable-mpi
+  - make 
+  - make install 
+  - cd .. 
+
+   # install vtk 
+  - sudo apt-get install python-vtk libvtk-java tcl-vtk libvtk5-qt4-dev
+  - pwd 
+  - ls /usr/local/lib 
+  - ls /usr/lib/
+
+   # build yamg-geo
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make 
+  - cd ..
+  
+  # build tests for yamg-geo
+  - cd tests
+  - mkdir build 
+  - cd build 
+  - cmake ..
+  - make
+  - cd ..
+
+script:
+  - ./bin/test_Area 
+

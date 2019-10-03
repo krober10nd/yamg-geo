@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+PROJECT(YAMG_TESTS)
+>>>>>>> 2d73ac2... Implementation of CI building with Travis.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../bin)
 set(YAMG_TEST_SRC ${CMAKE_SOURCE_DIR}/src)
 

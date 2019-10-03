@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 
     std::string basename("basename");
 
-    mesher.write_vti(basename);
+    //mesher.write_vti(basename);
 
     mesher.init_domain();
 
@@ -201,7 +201,11 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_VTK
     mesher.write_vtu(basename);
+<<<<<<< HEAD
 #endif
+=======
+
+>>>>>>> 2d73ac2... Implementation of CI building with Travis.
     mesher.write_gmsh(basename);
 
     mesher.dump_stats("this is the end");
