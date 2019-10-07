@@ -54,6 +54,8 @@ int main()
   // call the mesher 
   system("./bin/yamg-vp --help");
 
+  return 0; 
+
   vtkSmartPointer<vtkUnstructuredGrid> ug = vtkSmartPointer<vtkUnstructuredGrid>::New();
   vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
 

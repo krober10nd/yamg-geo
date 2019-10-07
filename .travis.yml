@@ -51,5 +51,5 @@ install:
   - cd ..
 
 script:
-  - ./bin/test_Area 
+  - ./build/tests/bin/test_Volume
 
