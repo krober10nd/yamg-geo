@@ -23,5 +23,5 @@ include_directories(include ${CMAKE_SOURCE_DIR}/include)
 # test volume 
 ADD_EXECUTABLE(test_Volume ${YAMG_TESTS_SRC}/test_Volume.cpp)
 
-TARGET_LINK_LIBRARIES(test_Volume ${YAMG_LIBRARIES})
+TARGET_LINK_LIBRARIES(test_Volume ${YAMG_LIBRARIES} yamg)
 

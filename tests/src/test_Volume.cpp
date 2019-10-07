@@ -10,10 +10,53 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkXMLUnstructuredGridReader.h>
 
+#include <string>
 #include <cassert> 
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <vector> 
+
+double yamg_feature_resolution=-1; // default is minimum of nx[3]
+double yamg_scale=200.0; // speed of sound in sea water gets this resolution in m 
+double vp_sw=1484.0; // Velocity of sound in sea water
+
+// call back function for p4est to refine octrees
+extern "C" {
+    int refine_fn(p4est_t *p4est, p4est_topidx_t which_tree, p4est_quadrant_t *quadrant)
+    {
+        double quad[3*8];
+        int index_range[6];
+        Yamg::generate_quadcoords(p4est, which_tree, quadrant, quad, NULL, index_range);
+
+        // Check if we have already reached the smallest feature size.
+        double maxl=pow(quad[0]-quad[3], 2);
+        maxl = std::max(maxl, pow(quad[1]-quad[2*3+1], 2));
+        maxl = std::max(maxl, pow(quad[2]-quad[4*3+2], 2));
+        maxl = sqrt(maxl);
+
+        if(maxl<=yamg_feature_resolution) {
+            return 0;
+        }
+
+        for(int i=index_range[0]; i<=index_range[1]; i++) {
+            for(int j=index_range[2]; j<=index_range[3]; j++) {
+                for(int k=index_range[4]; k<=index_range[5]; k++) {
+                    float vp = Yamg::get_scalar(i, j, k);
+
+                    if(std::isfinite(vp)) {
+                        float l = yamg_scale*vp/vp_sw;
+                        if(l<maxl) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+}
 
 // subtract two 3-dimensional vectors
 template <typename T> 
@@ -45,17 +88,37 @@ double tet_volume(std::vector<double> a, std::vector<double> b, std::vector<doub
     return (std::abs(m/6.0));
 }
 
+
 // load in the mesh and calculate the volume of all the tetraheadron
-int main()
+int main(int argc, char *argv[])
 {
-  
-  std::string basename("box10x10x10.vtu");
-  
+
   // call the mesher 
-  system("./bin/yamg-vp --help");
+  Yamg mesher(&argc, &argv);
+
+  // binary file with velocities of a unit cube [0 1] x [0 1] x [0 1]
+  // and read in vp from segy file
+  std::string filename= "box.vel"; 
+  mesher.read_velocity_file(mesher, filename);
+
+  mesher.init_domain();
+
+  // Refine p4est to geometry
+  mesher.refine_p4est(refine_fn);
+
+  // Generate tetrahedra from quads 
+  mesher.triangulate();
+
+  std::string basename("box128x128x128");
+  mesher.write_vtu(basename);
+
+  mesher.finalise();
 
   return 0; 
 
+  /*
+  / Read it in and check its volume 
+  */
   vtkSmartPointer<vtkUnstructuredGrid> ug = vtkSmartPointer<vtkUnstructuredGrid>::New();
   vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
 
@@ -104,7 +167,9 @@ int main()
    }
 
   cout << "INFO: this mesh has " << NNodes << " nodes"<< endl; 
+  // ensure number of nodes matches baseline 
   cout << "INFO: this mesh has " << NElements << " elements"<< endl; 
+  // ensure number of elements matches baseline 
     
   double volume;
   double total_volume; 
@@ -127,6 +192,7 @@ int main()
   }
 
   cout << "INFO: this mesh has " << total_volume << endl; 
+  // ensure the volume matches the baseline 
 
   return 0;
 

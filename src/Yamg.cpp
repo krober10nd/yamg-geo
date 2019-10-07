@@ -23,6 +23,13 @@
 #include <unordered_set>
 #include <map>
 
+#include <getopt.h>
+#include <iostream>
+#include <fstream>
+#include <sys/stat.h>
+
+
+// todo: make these members of yamg class?
 long long _hash_stride[2];
 bool hash_trusty;
 double hash_resolution;
@@ -30,7 +37,8 @@ double hash_resolution;
 double geom_bounds[6];
 double ox[3], dx[3];
 int nx[3];
-std::vector<float> data;
+
+std::vector<float> data; // holds velocity data read in from segy file
 
 std::unordered_map<long long, int> unn2lnn;
 std::vector<long long> lnn2unn;
@@ -39,6 +47,139 @@ std::vector<double> gcoords;
 
 std::vector<int> gcells;
 std::vector<int> boundary;
+
+// 
+void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
+{
+    /*
+        scaling info:
+        H0.vel contains velocities vp in m/s
+        a length scale is typically  scale*vp/1500
+        with scale, for instance, 100, 50, 25, 10 or 5 m.
+
+        unformatted file, little-endian, with
+         3 doubles for ox (origin in x,y,z),
+         3 doubles for dx (spacing in x,y,z),
+         3 4-byte ints for nx (gridpoints in x,y,z),
+         nx(1)*nx(2)*nx(3) 4-byte floats for velocity vp,
+           x is fastest index, z is slowest
+    */
+
+    // check if file exists right away 
+    struct stat buffer;   
+    if(stat (filename.c_str(), &buffer) != 0) {
+        std::cerr<<"ERROR: missing velocity file"<<std::endl;
+        exit(-1);
+    }
+
+    std::ifstream input(filename.c_str(), std::ios::binary);
+    std::vector<float> data;
+    double origin[3], spacing[3];
+    int dims[3];
+    input.read((char *)origin, 3*sizeof(double));
+    input.read((char *)spacing, 3*sizeof(double));
+    input.read((char *)dims, 3*sizeof(int));
+
+    data.resize(dims[0]*dims[1]*dims[2]);
+    input.read((char *)data.data(), data.size()*sizeof(float));
+
+    input.close();
+
+    for(auto &val:data) {
+        if(!std::isfinite(val))
+        val = vp_sw;
+    }
+
+    mesher.set_data(data, origin, spacing, dims);
+
+    if(yamg_feature_resolution==-1) {
+        yamg_feature_resolution = std::min(spacing[0], std::min(spacing[1], spacing[2]));
+    }
+}
+
+// demonstrate usage of yamg-geo to user 
+void Yamg::usage(char *cmd)
+{
+    std::cout<<"Usage: "<<cmd<<" <vel-file> [options]\n"
+             <<"\nOptions:\n"
+             <<" -h, --help\n\tHelp! Prints this message.\n"
+             <<" -v, --verbose\n\tVerbose output.\n"
+             <<" -d, --debug\n\tDebug mode (slow!).\n"
+             <<" -r <value>, --resolution <value>\n\tSet minimum feature resolution.\n"
+             <<" -s <value>, --scale <value>\n\tSet scale length.\n";
+    return;
+}
+
+//
+int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
+{
+
+    // Set defaults
+    if(*argc==1) {
+        usage(*argv[0]);
+        exit(-1);
+    }
+
+    struct option longOptions[] = {
+        {"help", 0, 0, 'h'},
+        {"verbose", 0, 0, 'v'},
+        {"debug", 0, 0, 'd'},
+        {"resolution", optional_argument, 0, 'r'},
+        {"scale", optional_argument, 0, 's'},
+        {0, 0, 0, 0}
+    };
+
+    int optionIndex = 0;
+    int c;
+    const char *shortopts = "hvdr:s:";
+
+    // Set opterr to nonzero to make getopt print error messages
+    opterr=1;
+    while (true) {
+        c = getopt_long(*argc, *argv, shortopts, longOptions, &optionIndex);
+
+        if (c == -1) break;
+
+        switch (c) {
+        case 'h':
+            usage(*argv[0]);
+            break;
+        case 'v':
+            mesher.enable_verbose();
+            break;
+        case 'd':
+            mesher.enable_debugging();
+            break;
+        case 'r':
+            yamg_feature_resolution = atof(optarg);
+            break;
+        case 's':
+            yamg_scale = atof(optarg);
+            break;
+        case '?':
+            // missing argument only returns ':' if the option string starts with ':'
+            // but this seems to stop the printing of error messages by getopt?
+            std::cerr<<"ERROR: unknown option or missing argument\n";
+            usage(*argv[0]);
+            exit(-1);
+        case ':':
+            std::cerr<<"ERROR: missing argument\n";
+            usage(*argv[0]);
+            exit(-1);
+        default:
+            // unexpected:
+            std::cerr<<"ERROR: getopt returned unrecognized character code\n";
+            exit(-1);
+        }
+    }
+
+    //
+    std::string filename((*argv)[*argc-1]);
+    read_velocity_file(mesher, filename);
+
+    return 0;
+}
+
 
 // return a point to an integer indicating the start of a point 
 const double *Yamg::get_point(int nid) const
@@ -106,7 +247,6 @@ float Yamg::get_scalar(int i, int j, int k)
     return data[k*nx[0]*nx[1]+j*nx[0]+i];
 }
 
-// it isn't clear what there's too functions named identically 
 float Yamg::get_scalar(double x, double y, double z) const
 {
     int i = (x-ox[0])/dx[0];
@@ -536,7 +676,7 @@ Yamg::Yamg(int *argc, char ***argv)
     p4est_init(NULL, SC_LP_SILENT);
 
     p4est = NULL;
-    conn = NULL;
+    conn  = NULL;
     ghost = NULL;
 
     debugging = false;

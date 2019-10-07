@@ -1,145 +1,10 @@
 #include "Yamg.h"
-#include <getopt.h>
 
-#include <iostream>
-#include <fstream>
-#include <sys/stat.h>
-
-void usage(char *cmd)
-{
-    std::cout<<"Usage: "<<cmd<<" <vel-file> [options]\n"
-             <<"\nOptions:\n"
-             <<" -h, --help\n\tHelp! Prints this message.\n"
-             <<" -v, --verbose\n\tVerbose output.\n"
-             <<" -d, --debug\n\tDebug mode (slow!).\n"
-             <<" -r <value>, --resolution <value>\n\tSet minimum feature resolution.\n"
-             <<" -s <value>, --scale <value>\n\tSet scale length.\n";
-    return;
-}
-
-double __yamg_feature_resolution=-1;
-double __yamg_scale=200.0;
-
+double yamg_feature_resolution=-1; // default is minimum of nx[3]
+double yamg_scale=200.0; // speed of sound in sea water gets this resolution in m 
 double vp_sw=1484.0; // Velocity of sound in sea water
 
-void read_velocity_file(Yamg &mesher, std::string filename)
-{
-    ///*
-    //    scaling info:
-    //    H0.vel contains velocities vp in m/s
-    //    a length scale is typically  scale*vp/1500
-    //    with scale, for instance, 100, 50, 25, 10 or 5 m.
-
-    //    unformatted file, little-endian, with
-    //     3 doubles for ox (origin in x,y,z),
-    //     3 doubles for dx (spacing in x,y,z),
-    //     3 4-byte ints for nx (gridpoints in x,y,z),
-    //     nx(1)*nx(2)*nx(3) 4-byte floats for velocity vp,
-    //       x is fastest index, z is slowest
-    //*/
-    //
-    //
-
-    std::ifstream input(filename.c_str(), std::ios::binary);
-    std::vector<float> data;
-    double origin[3], spacing[3];
-    int dims[3];
-    input.read((char *)origin, 3*sizeof(double));
-    input.read((char *)spacing, 3*sizeof(double));
-    input.read((char *)dims, 3*sizeof(int));
-
-    data.resize(dims[0]*dims[1]*dims[2]);
-    input.read((char *)data.data(), data.size()*sizeof(float));
-
-    input.close();
-
-    for(auto &val:data) {
-        if(!std::isfinite(val))
-        val = vp_sw;
-    }
-
-    mesher.set_data(data, origin, spacing, dims);
-
-    if(__yamg_feature_resolution==-1) {
-        __yamg_feature_resolution = std::min(spacing[0], std::min(spacing[1], spacing[2]));
-    }
-}
-
-int parse_arguments(int *argc, char ***argv, Yamg &mesher)
-{
-
-    // Set defaults
-    if(*argc==1) {
-        usage(*argv[0]);
-        exit(-1);
-    }
-
-    struct option longOptions[] = {
-        {"help", 0, 0, 'h'},
-        {"verbose", 0, 0, 'v'},
-        {"debug", 0, 0, 'd'},
-        {"resolution", optional_argument, 0, 'r'},
-        {"scale", optional_argument, 0, 's'},
-        {0, 0, 0, 0}
-    };
-
-    int optionIndex = 0;
-    int c;
-    const char *shortopts = "hvdr:s:";
-
-    // Set opterr to nonzero to make getopt print error messages
-    opterr=1;
-    while (true) {
-        c = getopt_long(*argc, *argv, shortopts, longOptions, &optionIndex);
-
-        if (c == -1) break;
-
-        switch (c) {
-        case 'h':
-            usage(*argv[0]);
-            break;
-        case 'v':
-            mesher.enable_verbose();
-            break;
-        case 'd':
-            mesher.enable_debugging();
-            break;
-        case 'r':
-            __yamg_feature_resolution = atof(optarg);
-            break;
-        case 's':
-            __yamg_scale = atof(optarg);
-            break;
-        case '?':
-            // missing argument only returns ':' if the option string starts with ':'
-            // but this seems to stop the printing of error messages by getopt?
-            std::cerr<<"ERROR: unknown option or missing argument\n";
-            usage(*argv[0]);
-            exit(-1);
-        case ':':
-            std::cerr<<"ERROR: missing argument\n";
-            usage(*argv[0]);
-            exit(-1);
-        default:
-            // unexpected:
-            std::cerr<<"ERROR: getopt returned unrecognized character code\n";
-            exit(-1);
-        }
-    }
-
-    std::string filename((*argv)[*argc-1]);
-    struct stat buffer;   
-    if(stat (filename.c_str(), &buffer) == 0) {
-      read_velocity_file(mesher, filename);
-    }else{
-        std::cerr<<"ERROR: missing velocity file"<<std::endl;
-        usage(*argv[0]);
-        exit(-1);
-    }
-
-    return 0;
-}
-
+// call back function for p4est to refine octrees
 extern "C" {
     int refine_fn(p4est_t *p4est, p4est_topidx_t which_tree, p4est_quadrant_t *quadrant)
     {
@@ -153,7 +18,7 @@ extern "C" {
         maxl = std::max(maxl, pow(quad[2]-quad[4*3+2], 2));
         maxl = sqrt(maxl);
 
-        if(maxl<=__yamg_feature_resolution) {
+        if(maxl<=yamg_feature_resolution) {
             return 0;
         }
 
@@ -163,7 +28,7 @@ extern "C" {
                     float vp = Yamg::get_scalar(i, j, k);
 
                     if(std::isfinite(vp)) {
-                        float l = __yamg_scale*vp/1500.;
+                        float l = yamg_scale*vp/vp_sw;
                         if(l<maxl) {
                             return 1;
                         }
@@ -182,11 +47,10 @@ int main(int argc, char **argv)
     Yamg mesher(&argc, &argv);
 
     // and read in vp from segy file
-    parse_arguments(&argc, &argv, mesher);
+    mesher.parse_arguments(&argc, &argv, mesher);
 
+    // TODO: enable user to pass name of desired mesh file
     std::string basename("basename");
-
-    //mesher.write_vti(basename);
 
     mesher.init_domain();
 

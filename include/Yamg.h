@@ -16,11 +16,24 @@
 #include <unordered_set>
 #include <cmath> 
 
+extern double yamg_feature_resolution; //=-1; // default is minimum of nx[3]
+extern double yamg_scale; //=200.0; // speed of sound in sea water gets this resolution in m 
+extern double vp_sw; //=1484.0; // Velocity of sound in sea water
+
 class Yamg
 {
 public:
+    // default constructor 
     Yamg(int *argc, char ***argv);
+
+    // default destructor 
     ~Yamg();
+    
+    int parse_arguments(int *argc, char ***argv, Yamg &mesher);
+
+    void read_velocity_file(Yamg &mesher, std::string filename);
+
+    void usage(char *cmd);
 
     static void append_cell(int n0, int n1, int n2, int n3,
                             int b0, int b1, int b2, int b3);
@@ -58,11 +71,10 @@ public:
     void triangulate();
 
     void write_vtu(std::string basename);
-    void write_vti(std::string basename) const;
-    void write_pvtu(std::string basename);
     void write_gmsh(std::string basename);
 
 private:
+
     // MPI communicator
     sc_MPI_Comm mpicomm;
 
