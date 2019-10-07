@@ -40,11 +40,12 @@ install:
   - cd build
   - cmake ..
   - make 
-  - cd ..
   
   # build tests for yamg-geo
   - make test_Volume 
 
+  # exit the build directory 
+  - cd ..
 script:
   - ./build/tests/bin/test_Volume
 
