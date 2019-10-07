@@ -80,12 +80,13 @@ include_directories(include ${CMAKE_SOURCE_DIR}/include)
 
 set(CXX_SOURCES ${CMAKE_SOURCE_DIR}/src/Yamg.cpp)
 
+# add tests 
+ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
+
 # target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
 target_link_libraries(yamg ${YAMG_LIBRARIES})
 
-# add tests 
-#ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
-
+# demo executable to run program
 ADD_EXECUTABLE(yamg-vp ${CMAKE_SOURCE_DIR}/src/yamg-vp.cpp)
 TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)

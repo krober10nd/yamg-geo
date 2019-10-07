@@ -22,7 +22,6 @@ double __yamg_scale=200.0;
 
 double vp_sw=1484.0; // Velocity of sound in sea water
 
-// marked for deletion, will use python to accomplish this
 void read_velocity_file(Yamg &mesher, std::string filename)
 {
     ///*
