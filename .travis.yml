@@ -43,12 +43,7 @@ install:
   - cd ..
   
   # build tests for yamg-geo
-  - cd tests
-  - mkdir build 
-  - cd build 
-  - cmake ..
-  - make
-  - cd ..
+  - make test_Volume 
 
 script:
   - ./build/tests/bin/test_Volume
