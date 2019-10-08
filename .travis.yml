@@ -47,5 +47,6 @@ install:
   # exit the build directory 
   - cd ..
 script:
-  - ./build/tests/bin/test_Volume
+  - ./build/tests/bin/test_Volume tests/data/UnitCube.bin -r 0.1 -s 0.1
+
 

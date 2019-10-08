@@ -96,10 +96,11 @@ int main(int argc, char *argv[])
   // call the mesher 
   Yamg mesher(&argc, &argv);
 
-  // binary file with velocities of a unit cube [0 1] x [0 1] x [0 1]
   // and read in vp from segy file
-  std::string filename= "UnitCube.bin"; 
-  mesher.read_velocity_file(mesher, filename);
+  mesher.parse_arguments(&argc, &argv, mesher);
+
+  // TODO: enable user to pass name of desired mesh file
+  std::string basename("UnitCube.vtu");
 
   mesher.init_domain();
 
@@ -109,12 +110,9 @@ int main(int argc, char *argv[])
   // Generate tetrahedra from quads 
   mesher.triangulate();
 
-  std::string basename("UnitCube");
   mesher.write_vtu(basename);
 
   mesher.finalise();
-
-  return 0; 
 
   /*
   / Read it in and check its volume 

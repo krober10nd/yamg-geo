@@ -66,6 +66,7 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     */
 
     // check if file exists right away 
+    cout << "FILE IS " << filename.c_str() << endl; 
     struct stat buffer;   
     if(stat (filename.c_str(), &buffer) != 0) {
         std::cerr<<"ERROR: missing velocity file"<<std::endl;
