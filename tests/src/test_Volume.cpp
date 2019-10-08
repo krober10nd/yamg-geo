@@ -114,8 +114,6 @@ int main(int argc, char *argv[])
 
   mesher.finalise();
   
-  return 0; 
-
   /*
   / Read it in and check its volume 
   */
