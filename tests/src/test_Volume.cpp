@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 
   // binary file with velocities of a unit cube [0 1] x [0 1] x [0 1]
   // and read in vp from segy file
-  std::string filename= "box.vel"; 
+  std::string filename= "UnitCube.bin"; 
   mesher.read_velocity_file(mesher, filename);
 
   mesher.init_domain();
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
   // Generate tetrahedra from quads 
   mesher.triangulate();
 
-  std::string basename("box128x128x128");
+  std::string basename("UnitCube");
   mesher.write_vtu(basename);
 
   mesher.finalise();

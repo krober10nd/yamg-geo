@@ -79,6 +79,9 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     input.read((char *)origin, 3*sizeof(double));
     input.read((char *)spacing, 3*sizeof(double));
     input.read((char *)dims, 3*sizeof(int));
+    //cout << "INFO: ORIGINS are " << origin[0] << " " << origin[1] << " " << origin[2] << endl; 
+    //cout << "INFO: SPACINGS are " << spacing[0] << " " << spacing[1] << " " << spacing[2] << endl; 
+    //cout << "INFO: DIMS are " << dims[0] << " " << dims[1] << " " << dims[2] << endl; 
 
     data.resize(dims[0]*dims[1]*dims[2]);
     input.read((char *)data.data(), data.size()*sizeof(float));
@@ -95,6 +98,8 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     if(yamg_feature_resolution==-1) {
         yamg_feature_resolution = std::min(spacing[0], std::min(spacing[1], spacing[2]));
     }
+    cout << "INFO: FEATURE RESOLUTION IS " << yamg_feature_resolution << endl; 
+    cout << "INFO: FEATURE SCALE IS " << yamg_scale << endl; 
 }
 
 // demonstrate usage of yamg-geo to user 
