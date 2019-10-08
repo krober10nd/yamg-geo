@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
   mesher.parse_arguments(&argc, &argv, mesher);
 
   // TODO: enable user to pass name of desired mesh file
-  std::string basename("UnitCube.vtu");
+  std::string basename("UnitCube");
 
   mesher.init_domain();
 
@@ -113,6 +113,8 @@ int main(int argc, char *argv[])
   mesher.write_vtu(basename);
 
   mesher.finalise();
+  
+  return 0; 
 
   /*
   / Read it in and check its volume 
