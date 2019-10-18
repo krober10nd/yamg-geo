@@ -11,8 +11,9 @@ int main(int argc, char **argv)
     mesher.init_domain();
 
     // Refine p4est to geometry
-    mesher.refine_p4est(Yamg::refine_fn);
-    
+    int lb_its = 3; // number of times to load balance
+    mesher.refine_p4est(Yamg::refine_fn,lb_its);
+
     // Generate tetrahedra from quads 
     mesher.triangulate();
 

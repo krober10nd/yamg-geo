@@ -57,7 +57,7 @@ public:
 
     void init_domain();
 
-    void refine_p4est(p4est_refine_t refine_fn);
+    void refine_p4est(p4est_refine_t refine_fn, int recursive);
 
     void sanity_mesh(const char *file=NULL, int line=0) const;
     void set_data(const std::vector<float> &data_in, const double *origin, const double *spacing, const int *dims);

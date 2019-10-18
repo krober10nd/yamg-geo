@@ -124,9 +124,6 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     input.read((char *)origin, 3*sizeof(double));
     input.read((char *)spacing, 3*sizeof(double));
     input.read((char *)dims, 3*sizeof(int));
-    //cout << "INFO: ORIGINS are " << origin[0] << " " << origin[1] << " " << origin[2] << endl; 
-    //cout << "INFO: SPACINGS are " << spacing[0] << " " << spacing[1] << " " << spacing[2] << endl; 
-    //cout << "INFO: DIMS are " << dims[0] << " " << dims[1] << " " << dims[2] << endl; 
 
     data.resize(dims[0]*dims[1]*dims[2]);
     input.read((char *)data.data(), data.size()*sizeof(float));
@@ -143,9 +140,8 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     if(yamg_feature_resolution==-1) {
         yamg_feature_resolution = std::min(spacing[0], std::min(spacing[1], spacing[2]));
     }
-    // wrap these so only proc 0 shows it 
     if(rank==0) {
-      cout << "INFO: Feature resolution is " << yamg_feature_resolution << endl; 
+      cout << "INFO: Velocity model resolution is " << yamg_feature_resolution << endl; 
       cout << "INFO: Feature scale is  " << yamg_scale << endl; 
     }
 }
@@ -391,7 +387,7 @@ long double tri_area(const double *x1, const double *x2, const double *x3) {
 // generates an index_range for the vector gcoords
 void Yamg::generate_quadcoords(const p4est_t *p4est, p4est_topidx_t treeid, const p4est_quadrant_t *quad, double *x, int *boundary_id, int *index_range)
 {
-    assert(P4EST_CHILDREN==8); // not pretending this is general
+    assert(P4EST_CHILDREN==8); // not pretending this is general (as in only 3d?)
 
     p4est_quadrant_t node;
     // loop over all the children of the node 
@@ -794,9 +790,6 @@ void Yamg::init_domain()
 {
     init_coord_hash();
     create_p4est();
-    // write out p4est to disk
-    //p4est_vtk_write_file (p4est, NULL, P4EST_STRING);
-
 }
 
 // Init geometric hashing.
@@ -823,7 +816,7 @@ void Yamg::create_p4est()
     double lz = geom_bounds[5] - geom_bounds[4];
 
     assert(lx>0 && ly>0 && lz>0);
-    double base_size=std::min(lx, std::min(ly, lz));
+    double base_size=std::min(lx, std::min(ly, lz))/4.0;
 
     // Get dimensions.
     int ni=round(lx/base_size);
@@ -906,24 +899,52 @@ void Yamg::create_p4est()
 
 }
 
-// member function to decide whether or not to refine the quad 
-void Yamg::refine_p4est(p4est_refine_t refine_fn)
+
+// refine the cube several times and load balance before finishing it recursively 
+void Yamg::refine_p4est(p4est_refine_t refine_fn, int lb_its)
 {
     double tic = MPI_Wtime();
     if(verbose && rank==0)
-        std::cout<<"INFO: void Yamg::refine_p4est(...) :: ";
+        std::cout<<"INFO: void Yamg::refine_p4est(int lb_its="<<lb_its<<") :: ";
 
-    p4est_refine (p4est, 1, refine_fn, NULL);
+    int recursive = 0;
+    int partforcoarsen = 0;
+
+    if (nranks>1) {
+        // Refine the forest recursively in parallel.
+        for(int r=0; r<lb_its; r++) {
+            p4est_refine (p4est, recursive, refine_fn, NULL);
+
+            /* If we call the 2:1 balance we ensure that neighbors do not differ in size
+             * by more than a factor of 2. This can optionally include diagonal
+             * neighbors across edges or corners as well; see p4est.h. */
+            p4est_balance (p4est, P4EST_CONNECT_FACE, NULL);
+
+            /* Partition: The quadrants are redistributed for equal element count.  The
+             * partition can optionally be modified such that a family of octants, which
+             * are possibly ready for coarsening, are never split between processors. */
+            p4est_partition (p4est, partforcoarsen, NULL);
+        }
+    }
+
+    // Serial refinement or completion of parallel refinement.
+    recursive = 1;
+    p4est_refine (p4est, recursive, refine_fn, NULL);
     p4est_balance (p4est, P4EST_CONNECT_FULL, NULL);
+
+    if (nranks>1) {
+        // Final load balance.
+        p4est_partition (p4est, partforcoarsen, NULL);
+    }
 
     ghost = p4est_ghost_new (p4est, P4EST_CONNECT_FULL);
 
-    // write out p4est to disk
-    p4est_vtk_write_file (p4est, NULL, P4EST_STRING "p4est");
+    p4est_vtk_write_file(p4est, NULL, "DEBUG");
 
     if(verbose && rank==0)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
 }
+
 
 // 
 void Yamg::triangulate()
@@ -1031,6 +1052,7 @@ int Yamg::get_number_tets()
     return gcells.size()/4;
 }
 
+
 //
 void Yamg::write_vtu(std::string basename)
 {
@@ -1038,11 +1060,10 @@ void Yamg::write_vtu(std::string basename)
     if(verbose)
         std::cout<<"INFO: void Yamg::write_vtu(std::string basename) :: ";
 
-    assert(rank==0);
-
     int NNodes=gcoords.size()/3;
 
     std::string filename(basename);
+    filename += std::to_string(rank) ; 
     filename += ".vtu";
 
     NNodes=gcoords.size()/3;
