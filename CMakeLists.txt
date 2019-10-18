@@ -1,11 +1,6 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
-# accept the silly policy to enable the use of _root vars
-CMAKE_POLICY(SET CMP0074 NEW)
-PROJECT(YAMG)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1...3.15)
 
-# The version number.
-set (YAMG_VERSION_MAJOR 0)
-set (YAMG_VERSION_MINOR 1)
+PROJECT(YAMG VERSION 0.5 LANGUAGES CXX)
 
 set (CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/CMake/Modules ${CMAKE_MODULE_PATH})
 
@@ -13,10 +8,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-enable_language(C) 
-enable_language(CXX)
 
 set (YAMG_LIBRARIES)
+
 
 find_package(P4EST REQUIRED)
 if(HAVE_P4EST)
@@ -46,7 +40,8 @@ FIND_PACKAGE(VTK NO_MODULE)
 if(VTK_FOUND)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
-  include(${VTK_USE_FILE})
+  include_directories(${VTK_INCLUDES})
+
   set (YAMG_LIBRARIES ${VTK_LIBRARIES} ${YAMG_LIBRARIES})
   add_definitions(-DVTK_FOUND)
 else()
@@ -58,7 +53,7 @@ CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 if(COMPILER_SUPPORTS_CXX11)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 else()
-        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -69,24 +64,34 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Intel")
   SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -xHOST -g")
 endif()
 
+
 find_package(MPI REQUIRED)
-if(MPI_FOUND)
-  include_directories(${MPI_INCLUDE_PATH})
+IF(MPI_FOUND) 
+  message(STATUS "Building with MPI support")
+  set(CMAKE_CXX_COMPILE_FLAGS "${CMAKE_CXX_COMPILE_FLAGS} ${MPI_COMPILE_FLAGS}")
+  set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} ${MPI_LINK_FLAGS}")
   set (YAMG_LIBRARIES ${MPI_LIBRARIES} ${YAMG_LIBRARIES})
+
+  include_directories(${MPI_INCLUDE_PATH})
+
   add_definitions(-DMPI_FOUND)
+else()
+  message(STATUS "System could not locate MPI dependencies.")
 endif()
 
-include_directories(include ${CMAKE_SOURCE_DIR}/include)
+
+include_directories(include ${CMAKE_BINARY_DIR}/include)
+
 
 set(CXX_SOURCES ${CMAKE_SOURCE_DIR}/src/Yamg.cpp)
 
-# add tests 
-ADD_SUBDIRECTORY(tests EXCLUDE_FROM_ALL)
-
-# target_link_library
 add_library(yamg SHARED ${CXX_SOURCES})
+
 target_link_libraries(yamg ${YAMG_LIBRARIES})
 
-# demo executable to run program
-ADD_EXECUTABLE(yamg-vp ${CMAKE_SOURCE_DIR}/src/yamg-vp.cpp)
-TARGET_LINK_LIBRARIES(yamg-vp ${YAMG_LIBRARIES} yamg)
+add_executable(yamg-vp ${CMAKE_SOURCE_DIR}/src/yamg-vp.cpp)
+target_link_libraries(yamg-vp ${YAMG_LIBRARIES} yamg)
+
+# add tests 
+add_subdirectory(tests EXCLUDE_FROM_ALL) 
+

@@ -29,7 +29,6 @@
 #include <sys/stat.h>
 
 
-// todo: make these members of yamg class?
 long long _hash_stride[2];
 bool hash_trusty;
 double hash_resolution;
@@ -48,6 +47,47 @@ std::vector<double> gcoords;
 std::vector<int> gcells;
 std::vector<int> boundary;
 
+double yamg_feature_resolution=-1; // default is minimum of nx[3]
+double yamg_scale=200.0; // speed of sound in sea water gets this resolution in m 
+double vp_sw=1484.0; // Velocity of sound in sea water
+
+// call back function for p4est to refine octrees
+// static member function
+extern "C" {
+    int Yamg::refine_fn(p4est_t *p4est, p4est_topidx_t which_tree, p4est_quadrant_t *quadrant)
+    {
+        double quad[3*8];
+        int index_range[6];
+        Yamg::generate_quadcoords(p4est, which_tree, quadrant, quad, NULL, index_range);
+
+        // Check if we have already reached the smallest feature size.
+        double maxl=pow(quad[0]-quad[3], 2);
+        maxl = std::max(maxl, pow(quad[1]-quad[2*3+1], 2));
+        maxl = std::max(maxl, pow(quad[2]-quad[4*3+2], 2));
+        maxl = sqrt(maxl);
+
+        if(maxl<=yamg_feature_resolution) {
+            return 0;
+        }
+
+        for(int i=index_range[0]; i<=index_range[1]; i++) {
+            for(int j=index_range[2]; j<=index_range[3]; j++) {
+                for(int k=index_range[4]; k<=index_range[5]; k++) {
+                    float vp = Yamg::get_scalar(i, j, k);
+
+                    if(std::isfinite(vp)) {
+                        float l = yamg_scale*vp/vp_sw;
+                        if(l<maxl) {
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+}
 // 
 void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
 {
@@ -66,10 +106,14 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     */
 
     // check if file exists right away 
-    cout << "FILE IS " << filename.c_str() << endl; 
+    if(rank==0) {
+      cout << "Velocity file is called " << filename.c_str() << endl; 
+    }
     struct stat buffer;   
     if(stat (filename.c_str(), &buffer) != 0) {
-        std::cerr<<"ERROR: missing velocity file"<<std::endl;
+        if(rank==0) {
+          std::cerr<<"ERROR: missing velocity file"<<std::endl;
+        }
         exit(-1);
     }
 
@@ -99,8 +143,11 @@ void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
     if(yamg_feature_resolution==-1) {
         yamg_feature_resolution = std::min(spacing[0], std::min(spacing[1], spacing[2]));
     }
-    cout << "INFO: FEATURE RESOLUTION IS " << yamg_feature_resolution << endl; 
-    cout << "INFO: FEATURE SCALE IS " << yamg_scale << endl; 
+    // wrap these so only proc 0 shows it 
+    if(rank==0) {
+      cout << "INFO: Feature resolution is " << yamg_feature_resolution << endl; 
+      cout << "INFO: Feature scale is  " << yamg_scale << endl; 
+    }
 }
 
 // demonstrate usage of yamg-geo to user 
@@ -110,6 +157,7 @@ void Yamg::usage(char *cmd)
              <<"\nOptions:\n"
              <<" -h, --help\n\tHelp! Prints this message.\n"
              <<" -v, --verbose\n\tVerbose output.\n"
+             <<" -o, --output\n\tName of generated mesh.\n"
              <<" -d, --debug\n\tDebug mode (slow!).\n"
              <<" -r <value>, --resolution <value>\n\tSet minimum feature resolution.\n"
              <<" -s <value>, --scale <value>\n\tSet scale length.\n";
@@ -129,6 +177,7 @@ int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
     struct option longOptions[] = {
         {"help", 0, 0, 'h'},
         {"verbose", 0, 0, 'v'},
+        {"output", optional_argument, 0 , 'o'},
         {"debug", 0, 0, 'd'},
         {"resolution", optional_argument, 0, 'r'},
         {"scale", optional_argument, 0, 's'},
@@ -137,7 +186,7 @@ int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
 
     int optionIndex = 0;
     int c;
-    const char *shortopts = "hvdr:s:";
+    const char *shortopts = "hvo:dr:s:";
 
     // Set opterr to nonzero to make getopt print error messages
     opterr=1;
@@ -152,6 +201,9 @@ int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
             break;
         case 'v':
             mesher.enable_verbose();
+            break;
+        case 'o':
+            ofname = optarg; 
             break;
         case 'd':
             mesher.enable_debugging();
@@ -179,8 +231,9 @@ int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
         }
     }
 
-    //
+    // read velocity file in binary
     std::string filename((*argv)[*argc-1]);
+
     read_velocity_file(mesher, filename);
 
     return 0;
@@ -689,10 +742,8 @@ Yamg::Yamg(int *argc, char ***argv)
     verbose = false;
 
     MPI_Comm_size(mpicomm, &nranks);
-    assert(nranks==1);
 
     MPI_Comm_rank(mpicomm, &rank);
-    assert(rank==0);
 }
 
 //
@@ -722,7 +773,7 @@ void Yamg::finalise()
     if(p4est!=NULL)
         p4est_destroy (p4est);
 
-    // Distroy connectivity.
+    // Destroy connectivity.
     if(conn!=NULL)
         p4est_connectivity_destroy (conn);
 
@@ -862,6 +913,9 @@ void Yamg::refine_p4est(p4est_refine_t refine_fn)
     p4est_balance (p4est, P4EST_CONNECT_FULL, NULL);
 
     ghost = p4est_ghost_new (p4est, P4EST_CONNECT_FULL);
+
+    // write out p4est to disk
+    //p4est_vtk_write_file (p4est, NULL, P4EST_STRING "p4est");
 
     if(verbose && rank==0)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
@@ -1076,31 +1130,31 @@ void Yamg::write_vtu(std::string basename)
 }
 
 //// do we need vti files?
-//void Yamg::write_vti(std::string basename) const
-//{
-//    std::string filename(basename);
-//    filename += ".vti";
-//
-//    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
-//    image->SetDimensions(nx);
-//    image->SetOrigin(ox);
-//    image->SetSpacing(dx);
-//    image->AllocateScalars(VTK_FLOAT, 1);
-//
-//    int ipos=0;
-//    for(int k=0;k<nx[2];k++) {
-//        for(int j=0;j<nx[1];j++) {
-//            for(int i=0;i<nx[0];i++) {
-//                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
-//            }
-//        }
-//    }
-//
-//    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-//    image_writer->SetFileName(filename.c_str());
-//    image_writer->SetInputData(image);
-//    image_writer->Write();
-//}
+void Yamg::write_vti(std::string basename) const
+{
+    std::string filename(basename);
+    filename += ".vti";
+
+    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
+    image->SetDimensions(nx);
+    image->SetOrigin(ox);
+    image->SetSpacing(dx);
+    image->AllocateScalars(VTK_FLOAT, 1);
+
+    int ipos=0;
+    for(int k=0;k<nx[2];k++) {
+        for(int j=0;j<nx[1];j++) {
+            for(int i=0;i<nx[0];i++) {
+                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
+            }
+        }
+    }
+
+    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
+    image_writer->SetFileName(filename.c_str());
+    image_writer->SetInputData(image);
+    image_writer->Write();
+}
 
 //
 void Yamg::write_gmsh(std::string basename)

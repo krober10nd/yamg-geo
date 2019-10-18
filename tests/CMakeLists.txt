@@ -11,7 +11,7 @@ FIND_PACKAGE(VTK NO_MODULE)
 if(VTK_FOUND)
   message(STATUS "Found VTK: ${VTK_DIR} (found version \"${VTK_VERSION}\")")
 
-  include(${VTK_USE_FILE})
+  #include(${VTK_USE_FILE})
   set (YAMG_LIBRARIES ${VTK_LIBRARIES} ${YAMG_LIBRARIES})
   add_definitions(-DVTK_FOUND)
 else()

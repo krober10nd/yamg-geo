@@ -1,5 +1,5 @@
-#ifndef RESERVOIRMESHER_H
-#define RESERVOIRMESHER_H
+#ifndef YAMG_H
+#define YAMG_H
 
 #include <mpi.h>
 
@@ -15,10 +15,7 @@
 #include <set>
 #include <unordered_set>
 #include <cmath> 
-
-extern double yamg_feature_resolution; //=-1; // default is minimum of nx[3]
-extern double yamg_scale; //=200.0; // speed of sound in sea water gets this resolution in m 
-extern double vp_sw; //=1484.0; // Velocity of sound in sea water
+#include <string>
 
 class Yamg
 {
@@ -29,6 +26,8 @@ public:
     // default destructor 
     ~Yamg();
     
+    static int refine_fn(p4est_t *p4est, p4est_topidx_t which_tree, p4est_quadrant_t *quadrant);
+
     int parse_arguments(int *argc, char ***argv, Yamg &mesher);
 
     void read_velocity_file(Yamg &mesher, std::string filename);
@@ -71,7 +70,10 @@ public:
     void triangulate();
 
     void write_vtu(std::string basename);
+    void write_vti(std::string basename) const; 
     void write_gmsh(std::string basename);
+
+    std::string ofname="YamgMesh"; // output mesh filename
 
 private:
 
