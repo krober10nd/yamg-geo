@@ -30,12 +30,12 @@ install:
   - cd .. 
 
    # install vtk 
-  - sudo apt-get install python-vtk libvtk-java tcl-vtk libvtk5-qt4-dev
+  - sudo apt-get install python-vtk libvtk-java tcl-vtk libvtk8-qt-dev
   - pwd 
   - ls /usr/local/lib 
   - ls /usr/lib/
 
-   # build yamg-geo
+   # build a executable to test things yamg-vp
   - mkdir build
   - cd build
   - cmake ..
