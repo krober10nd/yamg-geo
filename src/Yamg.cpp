@@ -794,6 +794,9 @@ void Yamg::init_domain()
 {
     init_coord_hash();
     create_p4est();
+    // write out p4est to disk
+    //p4est_vtk_write_file (p4est, NULL, P4EST_STRING);
+
 }
 
 // Init geometric hashing.
@@ -900,6 +903,7 @@ void Yamg::create_p4est()
 
     // Compute real tree_to_* fields and complete (edge and) corner fields.
     p4est_connectivity_complete (conn);
+
 }
 
 // member function to decide whether or not to refine the quad 
@@ -915,7 +919,7 @@ void Yamg::refine_p4est(p4est_refine_t refine_fn)
     ghost = p4est_ghost_new (p4est, P4EST_CONNECT_FULL);
 
     // write out p4est to disk
-    //p4est_vtk_write_file (p4est, NULL, P4EST_STRING "p4est");
+    p4est_vtk_write_file (p4est, NULL, P4EST_STRING "p4est");
 
     if(verbose && rank==0)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
@@ -1129,32 +1133,32 @@ void Yamg::write_vtu(std::string basename)
         std::cout<<MPI_Wtime()-tic<<" seconds"<<std::endl;
 }
 
-//// do we need vti files?
-void Yamg::write_vti(std::string basename) const
-{
-    std::string filename(basename);
-    filename += ".vti";
-
-    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
-    image->SetDimensions(nx);
-    image->SetOrigin(ox);
-    image->SetSpacing(dx);
-    image->AllocateScalars(VTK_FLOAT, 1);
-
-    int ipos=0;
-    for(int k=0;k<nx[2];k++) {
-        for(int j=0;j<nx[1];j++) {
-            for(int i=0;i<nx[0];i++) {
-                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
-            }
-        }
-    }
-
-    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-    image_writer->SetFileName(filename.c_str());
-    image_writer->SetInputData(image);
-    image_writer->Write();
-}
+// do we need vti files?
+//void Yamg::write_vti(std::string basename) const
+//{
+//    std::string filename(basename);
+//    filename += ".vti";
+//
+//    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
+//    image->SetDimensions(nx);
+//    image->SetOrigin(ox);
+//    image->SetSpacing(dx);
+//    image->AllocateScalars(VTK_FLOAT, 1);
+//
+//    int ipos=0;
+//    for(int k=0;k<nx[2];k++) {
+//        for(int j=0;j<nx[1];j++) {
+//            for(int i=0;i<nx[0];i++) {
+//                image->SetScalarComponentFromFloat(i, j, k, 0, data[ipos]);
+//            }
+//        }
+//    }
+//
+//    vtkSmartPointer<vtkXMLImageDataWriter> image_writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
+//    image_writer->SetFileName(filename.c_str());
+//    image_writer->SetInputData(image);
+//    image_writer->Write();
+//}
 
 //
 void Yamg::write_gmsh(std::string basename)
