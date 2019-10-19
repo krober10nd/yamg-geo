@@ -39,7 +39,7 @@ public:
 
     void build_facets(std::vector<int> &facets, std::vector<int> &facet_ids);
 
-    void dump_stats(std::string tag);
+    void dump_stats();
 
     void enable_debugging();
     void enable_verbose();

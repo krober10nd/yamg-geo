@@ -900,7 +900,7 @@ void Yamg::create_p4est()
 }
 
 
-// refine the cube several times and load balance before finishing it recursively 
+// refine cubes in parallel iteratively and load balance before finishing refinement recursively 
 void Yamg::refine_p4est(p4est_refine_t refine_fn, int lb_its)
 {
     double tic = MPI_Wtime();
@@ -939,7 +939,7 @@ void Yamg::refine_p4est(p4est_refine_t refine_fn, int lb_its)
 
     ghost = p4est_ghost_new (p4est, P4EST_CONNECT_FULL);
 
-    p4est_vtk_write_file(p4est, NULL, "DEBUG");
+    //p4est_vtk_write_file(p4est, NULL, "DEBUG");
 
     if(verbose && rank==0)
         std::cout<<MPI_Wtime()-tic<<" seconds\n";
@@ -1319,7 +1319,7 @@ double Yamg::total_area() const {
 }
 
 //
-void Yamg::dump_stats(std::string tag)
+void Yamg::dump_stats()
 {
     int NTetra = gcells.size()/4;
     double vol = total_volume();

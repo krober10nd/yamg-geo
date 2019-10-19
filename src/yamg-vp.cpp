@@ -21,9 +21,7 @@ int main(int argc, char **argv)
 
     mesher.write_vtu(mesher.ofname);
 
-    mesher.write_gmsh(mesher.ofname);
-
-    mesher.dump_stats("this is the end");
+    mesher.dump_stats();
 
     mesher.finalise();
 
