@@ -49,7 +49,8 @@ std::vector<int> boundary;
 
 double yamg_feature_resolution=-1; // default is minimum of nx[3]
 double yamg_scale=200.0; // speed of sound in sea water gets this resolution in m 
-double vp_sw=1484.0; // Velocity of sound in sea water
+const double vp_sw=1484.0; // Velocity of sound in sea water
+
 
 // call back function for p4est to refine octrees
 // static member function
@@ -89,6 +90,8 @@ extern "C" {
     }
 }
 // 
+
+
 void Yamg::read_velocity_file(Yamg &mesher, std::string filename)
 {
     /*
@@ -236,7 +239,7 @@ int Yamg::parse_arguments(int *argc, char ***argv, Yamg &mesher)
 }
 
 
-// return a point to an integer indicating the start of a point 
+// return a pointer indicating the start of a point 
 const double *Yamg::get_point(int nid) const
 {
     assert(nid>=0);
@@ -556,10 +559,10 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
     cavity_boundary[11] = _boundary[5];
 
     // Check for split edges.
-    // why would the edge be split?
+    // edges may be split due to refinement of p4est
     bool insert_center_point=false;
     // loop over all triangles in cavity  
-    // skipping empty slots 
+    // skipping empty slots which contain indices into split edges 
     for(int i=0; i<12; i++) {
         int *triangle=cavity.data()+i*6;
         for(int j=0; j<3; j++) {
@@ -611,15 +614,16 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
             }
 
             if(cutcnt==0) {
-                // add a new ccw orientated triangle to cavity that borders facet i
+		// at least one triangle in the brick has a split edge but not this facet. 
+		// create a tet by connecting up the facet (with no split edges) with the center point 
                 Yamg::append_cell(cavity[i*6+1], cavity[i*6+0], cavity[i*6+2], cid,
                                              -1, -1, -1, cavity_boundary[i]);
             } else if(cutcnt==1) {
+		// one edge of the facet is split leading to two new tets
                 int ref_copy[]= {-1, -1, -1, -1, -1, -1};
                 for(int j=0; j<3; j++) {
                     if(cavity[i*6+3+j]!=-1) {
                         for(int k=0; k<3; k++) {
-                            // need to analyze this why is there j+k?
                             // mod(j+k,3) will always yield answer < j+k 
                             ref_copy[k  ] = cavity[i*6+(j+k)%3];
                             ref_copy[k+3] = cavity[i*6+3+(j+k)%3];
@@ -634,6 +638,7 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
                 Yamg::append_cell(ref_copy[1], ref_copy[3], ref_copy[2], cid,
                                              -1, -1, -1, cavity_boundary[i]);
             } else if(cutcnt==2) {
+		// two edges of the facet are split leading to three new tets
                 int ref_copy[]= {-1, -1, -1, -1, -1, -1};
                 for(int j=0; j<3; j++) {
                     if(cavity[i*6+3+j]==-1) {
@@ -678,6 +683,8 @@ void mesh_quad (p4est_iter_volume_info_t * info, void *user_data)
         }
     } else {
         // Mesh simple case.
+	//  no edges of any facet in the brick are split
+	//  create 6 facets by connecting up the facets with the center point
         Yamg::append_cell(lnn[1], lnn[0], lnn[3], lnn[7],
                                      -1, _boundary[1], -1, _boundary[4]);
         Yamg::append_cell(lnn[7], lnn[4], lnn[5], lnn[0],
@@ -717,7 +724,7 @@ extern "C" {
     }
 }
 
-// class constructor (should this be up top?) 
+// default class constructor
 Yamg::Yamg(int *argc, char ***argv)
 {
     // Initialise MPI for p4est 
@@ -816,7 +823,7 @@ void Yamg::create_p4est()
     double lz = geom_bounds[5] - geom_bounds[4];
 
     assert(lx>0 && ly>0 && lz>0);
-    double base_size=std::min(lx, std::min(ly, lz))/4.0;
+    double base_size=std::min(lx, std::min(ly, lz));
 
     // Get dimensions.
     int ni=round(lx/base_size);
@@ -1318,9 +1325,13 @@ double Yamg::total_area() const {
     return area;
 }
 
+
 //
-void Yamg::dump_stats()
+int Yamg::testMeshGeometry()
 {
+    // error to pass tests 
+    const double errTol=0.001; 
+
     int NTetra = gcells.size()/4;
     double vol = total_volume();
     double area = total_area();
@@ -1330,8 +1341,66 @@ void Yamg::dump_stats()
     double dz = geom_bounds[5]-geom_bounds[4];
 
     double exact_volume = dx*dy*dz;
+    double errorVol,errorArea; 
     double exact_area = 2*(dx*dy + dx*dz + dy*dz);
 
-    std::cout<<"Total volume: "<<vol<<" (error="<<exact_volume-vol<<")"<<std::endl;
-    std::cout<<"Total area: "<<area<<" (error="<<exact_area-area<<")"<<std::endl;
-}
+    if(nranks > 1) {
+	/* parallel case 
+	   do a reduce on area and volume
+	   test fails in error is larger than 1e-3
+	*/
+	double tVol, tArea; 
+
+	 MPI_Allreduce(&area,&tArea,
+           1,MPI_DOUBLE,MPI_SUM,
+           mpicomm);
+
+        MPI_Allreduce(&vol,&tVol,
+          1,MPI_DOUBLE,MPI_SUM,
+          mpicomm);
+
+
+	 errorArea = exact_area-tArea; 
+
+	 if(rank==0) {
+	   if(errorArea < errTol) { 
+             std::cout<<"PASSED: Total area: "<<tArea<<" (error="<<errorArea<<")"<<std::endl;
+	     }
+	   else {
+             std::cout<<"FAILED: Total area: "<<tArea<<" (error="<<errorArea<<")"<<std::endl;
+	     return 1; 
+	    }
+
+	   errorVol = exact_volume-tVol; 
+	   if(errorVol < errTol) { 
+             std::cout<<"PASSED: Total volume: "<<tVol<<" (error="<<errorVol<<")"<<std::endl;
+	     }
+	   else {
+             std::cout<<"FAILED: Total volume: "<<tVol<<" (error="<<errorVol<<")"<<std::endl;
+	     return 1; 
+	    }
+	 }
+    }
+     else // serial case 
+    {
+	 errorArea = exact_area-area; 
+	if(errorArea < errTol) { 
+          std::cout<<"PASSED: Total area: "<<area<<" (error="<<errorArea<<")"<<std::endl;
+	  }
+	else {
+          std::cout<<"FAILED: Total area: "<<area<<" (error="<<errorArea<<")"<<std::endl;
+	  return 1; 
+	 }
+
+	errorVol = exact_volume-vol; 
+	if(errorVol < errTol) { 
+          std::cout<<"PASSED: Total volume: "<<vol<<" (error="<<errorVol<<")"<<std::endl;
+	  }
+	else {
+          std::cout<<"FAILED: Total volume: "<<vol<<" (error="<<errorVol<<")"<<std::endl;
+	  return 1; 
+	 }
+
+    }
+}    
+     

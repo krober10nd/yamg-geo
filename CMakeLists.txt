@@ -79,6 +79,7 @@ IF(MPI_FOUND)
   include_directories(${MPI_INCLUDE_PATH})
 
   add_definitions(-DMPI_FOUND)
+
 else()
   message(STATUS "System could not locate MPI dependencies.")
 endif()

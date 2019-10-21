@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
     mesher.write_vtu(mesher.ofname);
 
-    mesher.dump_stats();
+    mesher.testMeshGeometry();
 
     mesher.finalise();
 

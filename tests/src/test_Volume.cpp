@@ -19,9 +19,9 @@ int main(int argc, char *argv[])
 
   mesher.write_vtu(mesher.ofname);
 
-  mesher.finalise();
+  mesher.testMeshGeometry();
 
-  mesher.dump_stats();
+  mesher.finalise();
 
   return 0 ; 
 

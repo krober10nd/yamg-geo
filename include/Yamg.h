@@ -39,7 +39,7 @@ public:
 
     void build_facets(std::vector<int> &facets, std::vector<int> &facet_ids);
 
-    void dump_stats();
+    int testMeshGeometry();
 
     void enable_debugging();
     void enable_verbose();
